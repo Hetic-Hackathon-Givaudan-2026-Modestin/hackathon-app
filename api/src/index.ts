@@ -41,7 +41,7 @@ app.post('/api/questions', async (req, res) => {
   res.status(201).json(rows[0]);
 });
 
-// Même appel pour Gemini, Mistral, OpenAI… : seule la configuration change
+// Même appel pour Ollama, Mistral, OpenAI… : seule la configuration change
 async function ask(question: string): Promise<string> {
   const response = await fetch(`${AI_BASE_URL}/chat/completions`, {
     method: 'POST',
