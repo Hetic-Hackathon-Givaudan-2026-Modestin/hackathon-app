@@ -65,3 +65,5 @@ async function ask(question: string): Promise<string> {
 app.listen(PORT, () => console.log(`API sur http://localhost:${PORT}`));
 
 // Test
+
+const abc = 1;
