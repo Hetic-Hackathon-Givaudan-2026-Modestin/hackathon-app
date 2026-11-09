@@ -20,16 +20,16 @@ async function refresh() {
   );
 }
 
-form.addEventListener('submit', async (event) => {
-  event.preventDefault();
-  const question = new FormData(form).get('question');
-  await fetch('/api/questions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question }),
-  });
-  form.reset();
-  await refresh();
-});
+// form.addEventListener('submit', async (event) => {
+//   event.preventDefault();
+//   const question = new FormData(form).get('question');
+//   await fetch('/api/questions', {
+//     method: 'POST',
+//     headers: { 'Content-Type': 'application/json' },
+//     body: JSON.stringify({ question }),
+//   });
+//   form.reset();
+//   await refresh();
+// });
 
 refresh();
