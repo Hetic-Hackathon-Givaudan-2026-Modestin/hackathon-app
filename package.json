@@ -8,7 +8,8 @@
   ],
   "scripts": {
     "dev": "concurrently -n api,web \"npm run dev -w api\" \"npm run dev -w web\"",
-    "build": "npm run build --workspaces"
+    "build": "npm run build --workspaces",
+    "test": "node --test api/test/integration.test.js"
   },
   "devDependencies": {
     "concurrently": "^10.0.6"
