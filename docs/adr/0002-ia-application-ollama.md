@@ -11,13 +11,19 @@ désormais vers Ollama dans un conteneur.
 
 ## Décision
 
-Utiliser le service `ollama` de Docker Compose avec son API compatible OpenAI.
-Un service `ollama-pull` télécharge `llama3.2:3b` et les modèles sont conservés
-dans un volume Docker. L'API est configurée par `AI_BASE_URL`, `AI_MODEL` et
+Conserver Ollama comme moteur d'inférence. La configuration locale utilise le
+service `ollama` de Docker Compose, avec une API compatible OpenAI. Un service
+`ollama-pull` télécharge `llama3.2:3b` et les modèles sont conservés dans un
+volume Docker. L'API est configurée par `AI_BASE_URL`, `AI_MODEL` et
 `AI_API_KEY` ; aucune clé n'est nécessaire pour l'instance Ollama locale.
 
 Le modèle demandé par l'API et celui téléchargé par `ollama-pull` doivent
 correspondre si la configuration est modifiée.
+
+L'application doit pouvoir communiquer avec le service de l'équipe data, qui
+porte les données et le modèle. Le moyen d'accès à ce service est documenté
+dans l'ADR 0006 ; son contrat d'API et l'hébergement effectif d'Ollama restent
+à préciser avec cette équipe.
 
 ## Alternatives de comparaison
 
@@ -31,6 +37,8 @@ correspondre si la configuration est modifiée.
 
 - L'inférence utilise les ressources de la machine hébergeant Ollama, sans clé
   de fournisseur pour l'instance locale.
+- L'API technique ne doit pas implémenter la gestion des données ou de
+  l'inférence détenues par l'équipe data ; elle consomme leur contrat d'API.
 - Le premier téléchargement du modèle nécessite une connexion réseau et de
   l'espace disque. Les performances dépendent des ressources disponibles.
 - La disponibilité du serveur Ollama ne garantit pas que le téléchargement du
@@ -45,3 +53,4 @@ correspondre si la configuration est modifiée.
 - [Docker Compose](../../compose.yaml)
 - [Configuration d'exemple](../../api/.env.example)
 - [API](../../api/src/index.ts)
+- [ADR 0006](0006-integration-api-data-ngrok.md)

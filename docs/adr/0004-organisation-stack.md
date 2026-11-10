@@ -37,3 +37,4 @@ Les choix de persistance et d'IA sont documentés séparément dans les
 - [Workspaces et scripts](../../package.json)
 - [API](../../api/package.json)
 - [Interface web](../../web/package.json)
+- [Contrat OpenAPI](../../openapi.yaml)
