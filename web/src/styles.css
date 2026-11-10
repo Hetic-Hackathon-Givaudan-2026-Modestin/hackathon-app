@@ -1,0 +1,92 @@
+:root {
+  font-family: Arial, sans-serif;
+  color: #1c1c1c;
+  background: #f7f7f7;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  width: min(100% - 2rem, 720px);
+  margin: 0 auto;
+  padding: 3rem 0;
+}
+
+header,
+section {
+  padding: 1.5rem;
+  border-radius: 0.75rem;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 10%);
+}
+
+section {
+  margin-top: 1.5rem;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+.question-form {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.75rem;
+  border: 1px solid #999;
+  border-radius: 0.5rem;
+}
+
+button {
+  padding: 0.75rem 1rem;
+  border: 0;
+  border-radius: 0.5rem;
+  color: #fff;
+  background: #1e5c4a;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.error {
+  margin: 1.5rem 0 0;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  color: #8a1f11;
+  background: #ffe8e5;
+}
+
+.questions {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0;
+  list-style: none;
+}
+
+.questions li {
+  padding: 1rem;
+  border-left: 4px solid #1e5c4a;
+  background: #f4faf7;
+}
+
+.questions p {
+  margin: 0.5rem 0 0;
+}
+
+@media (max-width: 480px) {
+  .question-form {
+    flex-direction: column;
+  }
+}
