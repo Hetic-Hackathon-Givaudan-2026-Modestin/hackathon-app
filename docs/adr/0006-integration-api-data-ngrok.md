@@ -5,9 +5,9 @@
 
 ## Contexte
 
-L'équipe data fournit les données et le modèle auxquels l'application doit
-accéder. L'API technique reçoit la demande du front, l'envoie au service data,
-puis renvoie sa réponse au front.
+L'équipe data héberge Ollama et fournit les données et le modèle auxquels
+l'application doit accéder. L'API technique reçoit la demande du front,
+l'envoie au service data, puis renvoie sa réponse au front.
 
 ## Décision
 
@@ -37,7 +37,6 @@ réponses, l'authentification, les délais de réponse et les erreurs retournée
 
 ## Points restant à décider
 
-- Propriétaire de l'hébergement d'Ollama et du stockage des données.
 - Schéma exact des requêtes et réponses.
 - Mécanisme d'authentification et gestion des secrets.
 - Limites de temps, de taille et de débit des appels.

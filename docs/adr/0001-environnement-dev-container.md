@@ -16,8 +16,8 @@ l'utilisateur `node`. La configuration partage les extensions et réglages,
 redirige les ports utiles et installe les dépendances à la création. Elle
 crée `api/.env` depuis l'exemple uniquement s'il n'existe pas déjà.
 
-Le service `dev` attend que PostgreSQL soit prêt. Compose comprend également
-les services Ollama décrits dans [l'ADR 0002](0002-ia-application-ollama.md).
+Le service `dev` attend que PostgreSQL soit prêt. L'équipe data héberge
+Ollama ; Compose ne démarre pas de service de modèle local.
 
 ## Alternatives de comparaison
 
