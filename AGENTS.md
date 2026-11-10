@@ -14,7 +14,7 @@ Présentation du projet et démarrage du Dev Container : [README.md](README.md).
 
 - Les routes de l'API sont dans [api/src/index.ts](api/src/index.ts) ; le front utilise `/api`, transmis à l'API par le proxy [web/vite.config.ts](web/vite.config.ts).
 - Les scripts [db/init/](db/init/) ne s'exécutent qu'à la première initialisation de PostgreSQL : les modifier ne met pas à jour une base existante.
-- Le modèle téléchargé par `ollama-pull` dans [compose.yaml](compose.yaml) doit correspondre à `AI_MODEL` dans la configuration de l'API ; le modèle réel n'est pas testé par `npm test`.
+- Ollama est hébergé par l'équipe data. N'ajoute pas de service de modèle local ; l'intégration utilise leur API via ngrok une fois son contrat validé. Le modèle réel n'est pas testé par `npm test`.
 - Pour une tâche suivie dans GitHub, consulte son ticket et ses critères avant de modifier le code ; les modèles sont dans [.github/ISSUE_TEMPLATE/](.github/ISSUE_TEMPLATE/).
 - Les changements destinés à `develop` passent par une pull request ; ne pousse pas directement sur cette branche.
 

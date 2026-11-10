@@ -26,32 +26,7 @@ services:
       # Schéma et données de test, joués au premier démarrage
       - ./db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U app -d app']
+      test: ["CMD-SHELL", "pg_isready -U app -d app"]
       interval: 5s
       timeout: 3s
       retries: 10
-
-  # Le modèle de langage, local. API compatible OpenAI sur http://ollama:11434/v1
-  ollama:
-    image: ollama/ollama:latest
-    volumes:
-      - ollama:/root/.ollama
-    healthcheck:
-      test: ['CMD', 'ollama', 'list']
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
-  # Télécharge le modèle une fois (conservé dans le volume), puis s'arrête
-  ollama-pull:
-    image: ollama/ollama:latest
-    entrypoint: ['ollama', 'pull', 'llama3.2:3b']
-    environment:
-      OLLAMA_HOST: http://ollama:11434
-    depends_on:
-      ollama:
-        condition: service_healthy
-    restart: 'no'
-
-volumes:
-  ollama:
