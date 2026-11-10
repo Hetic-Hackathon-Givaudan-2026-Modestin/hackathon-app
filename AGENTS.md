@@ -18,6 +18,14 @@ Présentation du projet et démarrage du Dev Container : [README.md](README.md).
 - Pour une tâche suivie dans GitHub, consulte son ticket et ses critères avant de modifier le code ; les modèles sont dans [.github/ISSUE_TEMPLATE/](.github/ISSUE_TEMPLATE/).
 - Les changements destinés à `develop` passent par une pull request ; ne pousse pas directement sur cette branche.
 
+## Front (React)
+
+- Structure de [web/src/](web/src/) : `pages/` (une page par route, déclarées dans `App.tsx` avec React Router), `components/` (blocs de l'interface), `components/ui/` (champs et boutons réutilisables), `hooks/` et `lib/` (logique et validation sans JSX).
+- Réutilise `Button`, `TextField`, `PasswordField`, `SelectField` et `CheckboxField` de `components/ui/` plutôt que de recréer des champs ; un nouveau champ passe par `FieldShell` (libellé, erreur, accessibilité).
+- Les couleurs et le rayon viennent des variables CSS de `styles/global.css` ; chaque composant a son CSS à côté, avec des classes préfixées (`ui-`, `auth__`).
+- Routes actuelles : `/` (démo), `/inscription`, `/connexion`. Les formulaires ne sont pas encore reliés à l'API.
+- Le front n'appelle jamais l'API des data : il passe par notre API.
+
 ## Décisions
 
 - Lis [docs/adr/](docs/adr/README.md) avant de changer un composant ou d'ajouter une dépendance.
