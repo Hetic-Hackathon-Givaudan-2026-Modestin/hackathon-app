@@ -16,3 +16,5 @@ nouvel ADR et on indique dans l'ancien par lequel il est remplacé.
 | [0003](0003-codage-assiste-ia.md) | Codage assisté par l'IA | Proposé |
 | [0004](0004-organisation-stack.md) | Organisation et technologies de l'application | En place |
 | [0005](0005-base-postgresql.md) | PostgreSQL pour les données | En place |
+| [0006](0006-integration-api-data-ngrok.md) | Intégration API data via ngrok | En cours |
+| [0007](0007-choix-sgbd.md) | Réévaluation du choix du SGBD | Proposé |
