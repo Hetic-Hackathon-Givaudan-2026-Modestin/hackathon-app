@@ -2,11 +2,105 @@ openapi: 3.1.1
 info:
   title: Hackathon API
   version: 0.1.0
-  description: API utilisée par le front pour vérifier le service et gérer les questions.
+  description: API utilisée par le front pour gérer les comptes et les questions.
 servers:
   - url: http://localhost:3000
     description: Développement local
 paths:
+  /api/session:
+    post:
+      summary: Ouvre une session de 12 heures
+      operationId: createSession
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+      responses:
+        '204':
+          description: Session créée ; cookie HttpOnly, SameSite Strict et Secure en production.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+        '400':
+          description: Données invalides
+        '401':
+          description: Identifiants incorrects
+        '403':
+          description: Requête refusée
+        '429':
+          description: Trop de tentatives de connexion
+    get:
+      summary: Retourne le profil de la session active
+      operationId: getSession
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Profil connecté
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Session absente ou expirée
+    delete:
+      summary: Déconnecte et invalide la session
+      operationId: deleteSession
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '204':
+          description: Session supprimée
+        '403':
+          description: Requête refusée
+  /api/users:
+    post:
+      summary: Crée un compte utilisateur sans ouvrir de session
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '201':
+          description: Compte créé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Informations invalides
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Adresse email déjà utilisée, sans distinction de casse
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Erreur lors de la création du compte
   /api/health:
     get:
       summary: Vérifie la connexion à la base de données
@@ -60,7 +154,61 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: givbot_session
   schemas:
+    CreateUserRequest:
+      type: object
+      required: [fullName, email, company, sector, role, password]
+      properties:
+        fullName:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Les espaces en début et fin sont retirés.
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: Normalisé en minuscules après suppression des espaces autour.
+        company:
+          type: string
+          minLength: 1
+          maxLength: 200
+        sector:
+          type: string
+          enum: [flavors, fragrance]
+        role:
+          type: string
+          enum: [rd, marketing, purchasing, management, other]
+        password:
+          type: string
+          minLength: 8
+          maxLength: 256
+          format: password
+    User:
+      type: object
+      required: [id, fullName, email, company, sector, role, createdAt]
+      properties:
+        id:
+          type: integer
+        fullName:
+          type: string
+        email:
+          type: string
+          format: email
+        company:
+          type: string
+        sector:
+          type: string
+        role:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
     Health:
       type: object
       required:

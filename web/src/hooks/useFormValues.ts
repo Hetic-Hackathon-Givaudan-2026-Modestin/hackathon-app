@@ -14,5 +14,9 @@ export function useFormValues<T extends Record<string, string | boolean>>(
     }));
   }
 
-  return { values, onChange };
+  function reset() {
+    setValues(initial);
+  }
+
+  return { values, onChange, reset };
 }

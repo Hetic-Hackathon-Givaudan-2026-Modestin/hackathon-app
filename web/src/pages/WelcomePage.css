@@ -1,0 +1,45 @@
+.welcome {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.welcome__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--color-brand);
+}
+
+.welcome__hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 3rem;
+  min-height: 65vh;
+}
+
+.welcome__hero > div {
+  max-width: 40rem;
+}
+
+.welcome__hero h1 {
+  font-size: clamp(2rem, 4vw, 3.5rem);
+}
+
+.welcome__disabled {
+  border: 0;
+  border-radius: var(--radius);
+  padding: 0.9rem 1.2rem;
+  color: #fff;
+  background: #74676c;
+  font: inherit;
+}
+
+@media (max-width: 700px) {
+  .welcome__hero {
+    flex-direction: column-reverse;
+    justify-content: center;
+    gap: 1rem;
+  }
+}

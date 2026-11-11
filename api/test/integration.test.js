@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
-import { spawn } from 'node:child_process';
+import { randomUUID, scryptSync } from 'node:crypto';
+import { execFile, spawn } from 'node:child_process';
+import { promisify } from 'node:util';
 import { readFile } from 'node:fs/promises';
 import http from 'node:http';
 import net from 'node:net';
@@ -8,6 +9,8 @@ import { once } from 'node:events';
 import { setTimeout as delay } from 'node:timers/promises';
 import { test } from 'node:test';
 import pg from 'pg';
+
+const execFileAsync = promisify(execFile);
 
 async function listen(server) {
   server.listen(0, '127.0.0.1');
@@ -40,7 +43,7 @@ async function waitForApi(url, child, output) {
   throw new Error(`Délai de démarrage de l'API dépassé : ${output()}`);
 }
 
-test('API : base PostgreSQL et service IA simulé', { timeout: 30000 }, async (t) => {
+test('API : base PostgreSQL et service IA simulé', { timeout: 60000 }, async (t) => {
   assert.ok(process.env.DATABASE_URL, 'DATABASE_URL est requis pour les tests');
   const schema = `test_${randomUUID().replaceAll('-', '')}`;
   const admin = new pg.Pool({ connectionString: process.env.DATABASE_URL });
@@ -58,6 +61,16 @@ test('API : base PostgreSQL et service IA simulé', { timeout: 30000 }, async (t
     try {
       const sql = await readFile(new URL('../../db/init/001-schema.sql', import.meta.url), 'utf8');
       await db.query(sql);
+      await db.query("INSERT INTO questions (question, answer) VALUES ('existant', 'conservé')");
+      for (let i = 0; i < 2; i++) {
+        await execFileAsync(process.execPath, ['dist/migrate.js'], {
+          cwd: new URL('..', import.meta.url),
+          env: { ...process.env, DATABASE_URL: databaseUrl.toString() },
+        });
+      }
+      const preserved = await db.query('SELECT question, answer FROM questions');
+      assert.deepEqual(preserved.rows, [{ question: 'existant', answer: 'conservé' }]);
+      await db.query('DELETE FROM questions');
     } finally {
       await db.end();
     }
@@ -106,6 +119,183 @@ test('API : base PostgreSQL et service IA simulé', { timeout: 30000 }, async (t
       assert.equal(response.status, 200);
       assert.equal(data.status, 'ok');
       assert.match(data.db, /PostgreSQL/);
+    });
+
+    const registration = {
+      fullName: '  Camille Exemple  ',
+      email: '  Camille@Exemple.fr ',
+      company: ' Exemple ',
+      sector: 'flavors',
+      role: 'rd',
+      password: 'mot-de-passe-test',
+    };
+    const register = (body) => fetch(`${apiUrl}/api/users`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    await t.test('crée un compte avec un mot de passe haché', async () => {
+      const response = await register(registration);
+      assert.equal(response.status, 201);
+      const user = await response.json();
+      assert.equal(user.fullName, 'Camille Exemple');
+      assert.equal(user.email, 'camille@exemple.fr');
+      assert.equal(user.company, 'Exemple');
+      assert.ok(user.id);
+      assert.ok(user.createdAt);
+      assert.equal('password' in user, false);
+      assert.equal('password_hash' in user, false);
+
+      const db = new pg.Pool({ connectionString: databaseUrl.toString() });
+      try {
+        const { rows } = await db.query('SELECT password_hash FROM users WHERE id = $1', [user.id]);
+        const [algorithm, n, r, p, salt, hash] = rows[0].password_hash.split('$');
+        assert.equal(algorithm, 'scrypt');
+        const actual = scryptSync(registration.password, Buffer.from(salt, 'hex'), 64, {
+          N: Number(n), r: Number(r), p: Number(p), maxmem: 64 * 1024 * 1024,
+        });
+        assert.equal(actual.toString('hex'), hash);
+        assert.notEqual(rows[0].password_hash, registration.password);
+      } finally {
+        await db.end();
+      }
+    });
+
+    await t.test('refuse un email déjà utilisé même avec une casse différente', async () => {
+      const response = await register({ ...registration, email: 'CAMILLE@EXEMPLE.FR' });
+      assert.equal(response.status, 409);
+      assert.deepEqual(await response.json(), { error: 'Cette adresse email est déjà utilisée.' });
+    });
+
+    await t.test('refuse les données invalides', async () => {
+      for (const value of [
+        null,
+        { ...registration, email: 'invalide' },
+        { ...registration, fullName: ' ' },
+        { ...registration, company: '' },
+        { ...registration, sector: 'inconnu' },
+        { ...registration, role: 'inconnu' },
+        { ...registration, password: 'court' },
+        { ...registration, password: 'x'.repeat(257) },
+        { ...registration, email: 123 },
+      ]) {
+        const response = await register(value);
+        assert.equal(response.status, 400);
+        assert.deepEqual(await response.json(), { error: "Les informations d'inscription sont invalides." });
+      }
+      const malformed = await fetch(`${apiUrl}/api/users`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{',
+      });
+      assert.equal(malformed.status, 400);
+      assert.deepEqual(await malformed.json(), { error: "Les informations d'inscription sont invalides." });
+    });
+
+    await t.test('empêche deux inscriptions simultanées pour le même email', async () => {
+      const body = { ...registration, email: 'nouveau@exemple.fr' };
+      const responses = await Promise.all([register(body), register(body)]);
+      assert.deepEqual(responses.map((response) => response.status).sort(), [201, 409]);
+    });
+
+    const login = (body, cookie) => fetch(`${apiUrl}/api/session`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}) },
+      body: JSON.stringify(body),
+    });
+    const session = (cookie) => fetch(`${apiUrl}/api/session`, {
+      headers: cookie ? { cookie } : {},
+    });
+    const logout = (cookie) => fetch(`${apiUrl}/api/session`, {
+      method: 'DELETE',
+      headers: { 'content-type': 'application/json', cookie },
+      body: '{}',
+    });
+    let cookie;
+
+    await t.test('refuse les identifiants invalides sans révéler si le compte existe', async () => {
+      const wrong = await login({ email: registration.email, password: 'incorrect' });
+      const missing = await login({ email: 'absent@example.fr', password: 'incorrect' });
+      assert.equal(wrong.status, 401);
+      assert.equal(missing.status, 401);
+      assert.deepEqual(await wrong.json(), await missing.json());
+      assert.equal((await session()).status, 401);
+    });
+
+    await t.test('connecte, crée une session de 12 h et retourne le profil', async () => {
+      const response = await login({ email: registration.email, password: registration.password });
+      assert.equal(response.status, 204);
+      const setCookie = response.headers.get('set-cookie');
+      assert.match(setCookie, /HttpOnly/i);
+      assert.match(setCookie, /SameSite=Strict/i);
+      assert.match(setCookie, /Max-Age=43200/i);
+      cookie = setCookie.split(';')[0];
+      const profile = await session(cookie);
+      assert.equal(profile.status, 200);
+      assert.equal(profile.headers.get('cache-control'), 'no-store');
+      const user = await profile.json();
+      assert.equal(user.email, 'camille@exemple.fr');
+      assert.equal(user.fullName, 'Camille Exemple');
+      assert.equal('password_hash' in user, false);
+      const db = new pg.Pool({ connectionString: databaseUrl.toString() });
+      try {
+        const { rows } = await db.query('SELECT token_hash, expires_at, created_at FROM user_sessions');
+        assert.equal(rows.length, 1);
+        assert.notEqual(rows[0].token_hash, cookie.split('=')[1]);
+        const duration = rows[0].expires_at - rows[0].created_at;
+        assert.ok(duration > 43199000 && duration <= 43200000);
+      } finally {
+        await db.end();
+      }
+    });
+
+    await t.test('renouvelle la session et invalide l’ancien cookie', async () => {
+      const previous = cookie;
+      const response = await login({ email: registration.email, password: registration.password }, previous);
+      assert.equal(response.status, 204);
+      cookie = response.headers.get('set-cookie').split(';')[0];
+      assert.notEqual(cookie, previous);
+      assert.equal((await session(previous)).status, 401);
+      assert.equal((await session(cookie)).status, 200);
+    });
+
+    await t.test('refuse les requêtes de déconnexion cross-site', async () => {
+      const response = await fetch(`${apiUrl}/api/session`, {
+        method: 'DELETE',
+        headers: { 'content-type': 'application/json', 'sec-fetch-site': 'cross-site', cookie },
+        body: '{}',
+      });
+      assert.equal(response.status, 403);
+      assert.equal((await session(cookie)).status, 200);
+    });
+
+    await t.test('déconnecte et invalide le cookie côté serveur', async () => {
+      const response = await logout(cookie);
+      assert.equal(response.status, 204);
+      assert.match(response.headers.get('set-cookie'), /Expires=/i);
+      assert.equal((await session(cookie)).status, 401);
+    });
+
+    await t.test('refuse une session expirée', async () => {
+      const response = await login({ email: registration.email, password: registration.password });
+      cookie = response.headers.get('set-cookie').split(';')[0];
+      const db = new pg.Pool({ connectionString: databaseUrl.toString() });
+      try {
+        await db.query("UPDATE user_sessions SET expires_at = now() - interval '1 second'");
+      } finally {
+        await db.end();
+      }
+      assert.equal((await session(cookie)).status, 401);
+    });
+
+    await t.test('limite les tentatives de connexion', async () => {
+      for (let i = 0; i < 10; i++) {
+        assert.equal((await login({ email: registration.email, password: 'incorrect' })).status, 401);
+      }
+      const response = await login({ email: registration.email, password: registration.password });
+      assert.equal(response.status, 429);
+      assert.ok(Number(response.headers.get('retry-after')) > 0);
     });
 
     await t.test('refuse une question vide sans appeler l’IA', async () => {

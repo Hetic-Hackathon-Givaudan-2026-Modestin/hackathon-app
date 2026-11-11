@@ -1,23 +1,52 @@
 import { useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { AuthLayout } from '../components/AuthLayout';
+import { useSession } from '../components/SessionProvider';
 import { Button } from '../components/ui/Button';
 import { PasswordField } from '../components/ui/PasswordField';
 import { TextField } from '../components/ui/TextField';
 import { useFormValues } from '../hooks/useFormValues';
 
 export function LoginPage() {
-  const { values, onChange } = useFormValues({ email: '', password: '' });
+  const { values, onChange, reset } = useFormValues({ email: '', password: '' });
   const [status, setStatus] = useState('');
+  const [pending, setPending] = useState(false);
+  const { refresh } = useSession();
+  const navigate = useNavigate();
 
-  function onSubmit(event: FormEvent) {
+  async function onSubmit(event: FormEvent) {
     event.preventDefault();
-    // La connexion n'est pas encore branchée à l'API.
-    setStatus(
-      values.email && values.password
-        ? "La connexion n'est pas encore connectée à l'API."
-        : 'Renseignez votre email et votre mot de passe.',
-    );
+    if (pending) return;
+    if (!values.email.trim() || !values.password) {
+      setStatus('Renseignez votre email et votre mot de passe.');
+      return;
+    }
+    setPending(true);
+    setStatus('');
+    try {
+      const response = await fetch('/api/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(values),
+      });
+      if (response.status === 401) {
+        setStatus('Email ou mot de passe incorrect.');
+      } else if (response.status === 429) {
+        setStatus('Trop de tentatives. Réessayez plus tard.');
+      } else if (response.status === 400) {
+        setStatus('Renseignez un email et un mot de passe valides.');
+      } else if (response.status !== 204) {
+        setStatus('Impossible de vous connecter. Réessayez plus tard.');
+      } else {
+        reset();
+        await refresh();
+        navigate('/', { replace: true });
+      }
+    } catch {
+      setStatus("Impossible de joindre l'API. Vérifiez votre connexion.");
+    } finally {
+      setPending(false);
+    }
   }
 
   return (
@@ -44,9 +73,11 @@ export function LoginPage() {
           value={values.password}
           onChange={onChange}
         />
-        <Button type="submit">Se connecter</Button>
+        <Button type="submit" disabled={pending}>
+          {pending ? 'Connexion…' : 'Se connecter'}
+        </Button>
         {status && (
-          <p className="auth__status" role="status">
+          <p className="auth__status" role="alert">
             {status}
           </p>
         )}
