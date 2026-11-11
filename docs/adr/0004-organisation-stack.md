@@ -11,8 +11,8 @@ deux composants. Il faut pouvoir les développer ensemble et les distinguer.
 ## Décision
 
 Organiser le dépôt en deux workspaces npm : `api` et `web`. L'API est écrite
-en TypeScript avec Node.js et Express ; l'interface utilise Vite et
-TypeScript. Les scripts à la racine permettent de lancer les deux serveurs de
+en TypeScript avec Node.js et Express ; l'interface utilise React, construit
+avec Vite, et React Router pour la navigation. Les scripts à la racine permettent de lancer les deux serveurs de
 développement ensemble et de construire les deux workspaces.
 
 Les choix de persistance et d'IA sont documentés séparément dans les

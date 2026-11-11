@@ -1,0 +1,34 @@
+:root {
+  --color-brand: #8a1538;
+  --color-brand-dark: #6b102c;
+  --color-bg: #faf6f2;
+  --color-surface: #ffffff;
+  --color-text: #2b2226;
+  --color-muted: #6f6469;
+  --color-border: #ddd3d6;
+  --color-error: #c0262d;
+  --radius: 12px;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.demo {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}

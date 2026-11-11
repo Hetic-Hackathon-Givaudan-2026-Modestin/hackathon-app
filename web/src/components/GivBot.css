@@ -1,0 +1,25 @@
+.givbot {
+  width: 180px;
+  height: auto;
+}
+
+.givbot__arm {
+  transform-origin: 151px 140px;
+  animation: givbot-wave 1.6s ease-in-out infinite;
+}
+
+@keyframes givbot-wave {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(-35deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .givbot__arm {
+    animation: none;
+  }
+}

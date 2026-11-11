@@ -3,7 +3,7 @@
 ## Stack
 
 - **API :** Node.js 24 et Express, sur le port 3000.
-- **Front :** Vite et TypeScript, sur le port 5173.
+- **Front :** React (Vite, TypeScript et React Router), sur le port 5173.
 - **Base de données :** PostgreSQL 17 ; **IA :** Ollama hébergé par l'équipe data.
 
 ## Démarrer en trois étapes
