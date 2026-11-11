@@ -23,7 +23,8 @@ Présentation du projet et démarrage du Dev Container : [README.md](README.md).
 - Structure de [web/src/](web/src/) : `pages/` (une page par route, déclarées dans `App.tsx` avec React Router), `components/` (blocs de l'interface), `components/ui/` (champs et boutons réutilisables), `hooks/` et `lib/` (logique et validation sans JSX).
 - Réutilise `Button`, `TextField`, `PasswordField`, `SelectField` et `CheckboxField` de `components/ui/` plutôt que de recréer des champs ; un nouveau champ passe par `FieldShell` (libellé, erreur, accessibilité).
 - Les couleurs et le rayon viennent des variables CSS de `styles/global.css` ; chaque composant a son CSS à côté, avec des classes préfixées (`ui-`, `auth__`).
-- Routes actuelles : `/` (démo), `/inscription`, `/connexion`. Les formulaires ne sont pas encore reliés à l'API.
+- Routes actuelles : `/` (accueil connecté), `/profil`, `/demo`, `/inscription`, `/connexion`. L'inscription utilise `/api/users` ; la connexion et la déconnexion utilisent `/api/session`.
+- Les migrations SQL de [db/migrations/](db/migrations/) s'appliquent avec `npm run build` puis `npm run migrate -w api`, y compris sur une base déjà initialisée.
 - Le front n'appelle jamais l'API des data : il passe par notre API.
 
 ## Décisions

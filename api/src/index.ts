@@ -1,5 +1,7 @@
-import express from 'express';
+import express, { type NextFunction, type Request, type Response } from 'express';
 import pg from 'pg';
+import { hashPassword, parseRegistration } from './registration.js';
+import { authRouter } from './auth.js';
 
 // En dev, la configuration vient de api/.env ; en production, de l'hébergeur
 try {
@@ -13,7 +15,61 @@ const PORT = Number(process.env.PORT ?? 3000);
 
 const db = new pg.Pool({ connectionString: DATABASE_URL });
 const app = express();
+
+app.use('/api/users', express.json({ strict: false }));
+app.use('/api/users', (error: unknown, _req: Request, res: Response, next: NextFunction) => {
+  if (
+    error instanceof SyntaxError &&
+    'type' in error &&
+    error.type === 'entity.parse.failed'
+  ) {
+    res.status(400).json({ error: "Les informations d'inscription sont invalides." });
+    return;
+  }
+  next(error);
+});
+
+app.post('/api/users', async (req, res) => {
+  const registration = parseRegistration(req.body);
+  if (!registration) {
+    res
+      .status(400)
+      .json({ error: "Les informations d'inscription sont invalides." });
+    return;
+  }
+
+  const passwordHash = await hashPassword(registration.password);
+  try {
+    const { rows } = await db.query(
+      `INSERT INTO users (full_name, email, company, sector, role, password_hash)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, full_name AS "fullName", email, company, sector, role, created_at AS "createdAt"`,
+      [
+        registration.fullName,
+        registration.email,
+        registration.company,
+        registration.sector,
+        registration.role,
+        passwordHash,
+      ],
+    );
+    res.status(201).json(rows[0]);
+  } catch (error) {
+    if (
+      error instanceof pg.DatabaseError &&
+      error.code === '23505' &&
+      error.constraint === 'users_email_unique'
+    ) {
+      res.status(409).json({ error: 'Cette adresse email est déjà utilisée.' });
+      return;
+    }
+    throw error;
+  }
+});
+
 app.use(express.json());
+
+app.use('/api', authRouter(db));
 
 app.get('/api/health', async (_req, res) => {
   const { rows } = await db.query('SELECT version()');

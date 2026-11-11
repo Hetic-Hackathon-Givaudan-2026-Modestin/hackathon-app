@@ -44,17 +44,17 @@ export function validateRegistration(
   values: RegistrationValues,
 ): RegistrationErrors {
   const errors: RegistrationErrors = {};
-  if (!values.fullName.trim())
+  if (!values.fullName.trim() || values.fullName.trim().length > 200)
     errors.fullName = 'Indiquez votre prénom et nom.';
-  if (!/^\S+@\S+\.\S+$/.test(values.email))
+  if (values.email.trim().length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email.trim()))
     errors.email = 'Indiquez un email valide.';
-  if (!values.company.trim())
+  if (!values.company.trim() || values.company.trim().length > 200)
     errors.company = "Indiquez le nom de l'entreprise.";
-  if (!values.sector) errors.sector = "Choisissez un secteur d'activité.";
-  if (!values.role) errors.role = 'Choisissez votre rôle.';
-  if (values.password.length < MIN_PASSWORD_LENGTH)
-    errors.password = `Au moins ${MIN_PASSWORD_LENGTH} caractères.`;
-  if (!values.acceptTerms)
-    errors.acceptTerms = 'Vous devez accepter les conditions.';
+  if (!sectorOptions.some((option) => option.value === values.sector))
+    errors.sector = "Choisissez un secteur d'activité.";
+  if (!roleOptions.some((option) => option.value === values.role))
+    errors.role = 'Choisissez votre rôle.';
+  if (values.password.length < MIN_PASSWORD_LENGTH || values.password.length > 256)
+    errors.password = `Entre ${MIN_PASSWORD_LENGTH} et 256 caractères.`;
   return errors;
 }
