@@ -1,11 +1,136 @@
 .givbot {
   width: 180px;
   height: auto;
+  overflow: visible;
+}
+
+.givbot__shadow {
+  fill: rgb(43 34 38 / 12%);
+}
+
+.givbot__eye {
+  fill: #2b2226;
+}
+
+.givbot__cheek {
+  fill: #e8a33d;
+  opacity: 0.35;
+}
+
+.givbot__antenna {
+  fill: #e8a33d;
+}
+
+.givbot__bowtie {
+  fill: #e8a33d;
 }
 
 .givbot__arm {
-  transform-origin: 151px 140px;
-  animation: givbot-wave 1.6s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: 50% 8%;
+}
+
+.givbot__head,
+.givbot__body {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+}
+
+.givbot__eyes {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  animation: givbot-blink 4.5s infinite;
+}
+
+.givbot__antenna {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: givbot-pulse 2.4s ease-in-out infinite;
+}
+
+.givbot__body {
+  animation: givbot-float 3.2s ease-in-out infinite;
+}
+
+.givbot--greeting .givbot__arm--right {
+  animation: givbot-wave 1.4s ease-in-out infinite;
+}
+
+.givbot--greeting .givbot__head {
+  animation: givbot-bow 4s ease-in-out infinite;
+}
+
+.givbot--listening .givbot__head {
+  animation: givbot-tilt 3s ease-in-out infinite;
+}
+
+.givbot--listening .givbot__antenna {
+  animation-duration: 1.2s;
+}
+
+.givbot--thinking .givbot__antenna {
+  animation-duration: 0.7s;
+}
+
+.givbot--thinking .givbot__head {
+  animation: givbot-tilt 1.8s ease-in-out infinite;
+}
+
+.givbot--thinking .givbot__dots circle {
+  animation: givbot-dot 1.2s ease-in-out infinite;
+}
+
+.givbot--thinking .givbot__dots circle:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.givbot--thinking .givbot__dots circle:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+.givbot--happy .givbot__body {
+  animation: givbot-jump 1s ease-in-out infinite;
+}
+
+.givbot--happy .givbot__arm--left {
+  animation: givbot-cheer-left 1s ease-in-out infinite;
+}
+
+.givbot--happy .givbot__arm--right {
+  animation: givbot-cheer-right 1s ease-in-out infinite;
+}
+
+@keyframes givbot-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes givbot-blink {
+  0%,
+  94%,
+  100% {
+    transform: scaleY(1);
+  }
+  97% {
+    transform: scaleY(0.1);
+  }
+}
+
+@keyframes givbot-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 0.7;
+  }
 }
 
 @keyframes givbot-wave {
@@ -14,12 +139,74 @@
     transform: rotate(0deg);
   }
   50% {
-    transform: rotate(-35deg);
+    transform: rotate(-140deg);
+  }
+}
+
+@keyframes givbot-bow {
+  0%,
+  70%,
+  100% {
+    transform: rotate(0deg);
+  }
+  80% {
+    transform: rotate(6deg);
+  }
+}
+
+@keyframes givbot-tilt {
+  0%,
+  100% {
+    transform: rotate(-3deg);
+  }
+  50% {
+    transform: rotate(3deg);
+  }
+}
+
+@keyframes givbot-dot {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes givbot-jump {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-14px);
+  }
+}
+
+@keyframes givbot-cheer-left {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(140deg);
+  }
+}
+
+@keyframes givbot-cheer-right {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(-140deg);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .givbot__arm {
-    animation: none;
+  .givbot,
+  .givbot * {
+    animation: none !important;
   }
 }
