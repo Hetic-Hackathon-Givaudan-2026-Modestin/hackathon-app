@@ -9,6 +9,15 @@ import { TextareaField } from '../components/ui/TextareaField';
 import { useFormValues } from '../hooks/useFormValues';
 import { getBotSpeech, type FlowState } from '../lib/givbotSpeech';
 import {
+  createProject,
+  getProjectStatus,
+  ProjectApiError,
+  readProjectAccess,
+  saveProjectAccess,
+  type ProjectAccess,
+  type ProjectStatus,
+} from '../lib/projectApi';
+import {
   MAX_DESCRIPTION_LENGTH,
   initialProject,
   marketOptions,
@@ -24,30 +33,69 @@ import {
 const steps: ProjectStep[] = ['general', 'description'];
 const stepLabels = ['Votre projet', 'Description'];
 
-// Durée cosmétique de l'animation « GivBot réfléchit », avant l'évaluation réelle par l'API.
-const THINKING_MS = 1800;
-
 export function ProjectPage() {
   const { values, onChange, reset } = useFormValues(initialProject);
   const [stepIndex, setStepIndex] = useState(0);
-  const [flow, setFlow] = useState<FlowState>('form');
+  const [flow, setFlow] = useState<FlowState>('loading');
   const [attempted, setAttempted] = useState(false);
-  const timer = useRef<number | undefined>(undefined);
+  const [access, setAccess] = useState<ProjectAccess | null>(null);
+  const [status, setStatus] = useState<ProjectStatus>();
+  const [message, setMessage] = useState('');
+  const [storageWarning, setStorageWarning] = useState('');
+  const [restoreVersion, setRestoreVersion] = useState(0);
+  const submitting = useRef(false);
   const step = steps[stepIndex];
 
-  useEffect(() => () => window.clearTimeout(timer.current), []);
+  useEffect(() => {
+    let saved: ProjectAccess | null;
+    try {
+      saved = readProjectAccess(window.localStorage);
+    } catch {
+      setStorageWarning('Impossible de lire l’accès enregistré dans ce navigateur.');
+      setFlow('restore-error');
+      return;
+    }
+    if (!saved) {
+      setFlow('form');
+      return;
+    }
+    setAccess(saved);
+    setFlow('loading');
+    const controller = new AbortController();
+    getProjectStatus(saved, controller.signal).then(
+      (result) => {
+        setStatus(result);
+        setFlow('done');
+      },
+      () => {
+        if (!controller.signal.aborted) setFlow('restore-error');
+      },
+    );
+    return () => controller.abort();
+  }, [restoreVersion]);
+
+  useEffect(() => {
+    if (flow !== 'submitting') return;
+    function warnBeforeLeaving(event: BeforeUnloadEvent) {
+      event.preventDefault();
+      event.returnValue = '';
+    }
+    window.addEventListener('beforeunload', warnBeforeLeaving);
+    return () => window.removeEventListener('beforeunload', warnBeforeLeaving);
+  }, [flow]);
 
   const errors = attempted ? validateStep(step, values) : {};
   const hasErrors = Object.keys(errors).length > 0;
-  const speech = getBotSpeech(flow, step, values, hasErrors);
+  const speech = getBotSpeech(flow, step, values, hasErrors, status);
 
   function goTo(index: number) {
     setStepIndex(index);
     setAttempted(false);
   }
 
-  function onSubmit(event: FormEvent) {
+  async function onSubmit(event: FormEvent) {
     event.preventDefault();
+    if (submitting.current) return;
     if (Object.keys(validateStep(step, values)).length > 0) {
       setAttempted(true);
       return;
@@ -56,14 +104,64 @@ export function ProjectPage() {
       goTo(stepIndex + 1);
       return;
     }
+    if (Object.keys(validateStep('general', values)).length > 0) {
+      setStepIndex(0);
+      setAttempted(true);
+      return;
+    }
+    submitting.current = true;
+    setMessage('');
     setFlow('submitting');
-    timer.current = window.setTimeout(() => setFlow('done'), THINKING_MS);
+    try {
+      const created = await createProject(values);
+      setAccess({ id: created.id, accessToken: created.accessToken });
+      setStatus(created.status);
+      try {
+        saveProjectAccess(window.localStorage, created);
+        setStorageWarning('');
+      } catch {
+        setStorageWarning(
+          'L’accès au projet n’a pas pu être enregistré dans ce navigateur. Vous risquez de le perdre en quittant cette page.',
+        );
+      }
+      setFlow('done');
+    } catch (error) {
+      setMessage(error instanceof ProjectApiError ? error.message : 'Une erreur inattendue est survenue.');
+      setFlow('form');
+    } finally {
+      submitting.current = false;
+    }
   }
 
   function restart() {
     reset();
     goTo(0);
+    setMessage('');
     setFlow('form');
+  }
+
+  async function refreshStatus() {
+    if (!access) {
+      setRestoreVersion((value) => value + 1);
+      return;
+    }
+    setFlow('loading');
+    try {
+      setStatus(await getProjectStatus(access));
+      setFlow('done');
+    } catch {
+      setFlow('restore-error');
+    }
+  }
+
+  function retrySavingAccess() {
+    if (!access) return;
+    try {
+      saveProjectAccess(window.localStorage, access);
+      setStorageWarning('');
+    } catch {
+      setStorageWarning('Impossible d’enregistrer l’accès. Vous risquez de le perdre en quittant cette page.');
+    }
   }
 
   const title =
@@ -74,6 +172,9 @@ export function ProjectPage() {
       {flow === 'form' && (
         <>
           <Stepper steps={stepLabels} current={stepIndex} />
+          {message && <p className="ui-field__error" role="alert">{message}</p>}
+          {storageWarning && <p className="ui-field__error" role="alert">{storageWarning}</p>}
+          {access && <p className="project__muted">Un nouvel envoi remplacera l’accès au projet précédent dans ce navigateur.</p>}
           <form onSubmit={onSubmit} noValidate>
             {step === 'general' ? (
               <>
@@ -200,19 +301,44 @@ export function ProjectPage() {
           </form>
         </>
       )}
-      {flow === 'submitting' && (
+      {(flow === 'submitting' || flow === 'loading') && (
         <p className="project__muted" role="status">
-          Analyse de votre projet en cours…
+          {flow === 'submitting'
+            ? 'Envoi et évaluation en cours. Cela peut prendre jusqu’à deux minutes ; veuillez garder cette page ouverte.'
+            : 'Récupération de votre projet…'}
         </p>
+      )}
+      {flow === 'restore-error' && (
+        <>
+          <h2>Statut indisponible</h2>
+          <p role="alert">
+            {storageWarning || 'Impossible de retrouver votre projet. Vérifiez votre connexion puis réessayez.'}
+          </p>
+          <div className="project__actions">
+            <Button type="button" onClick={refreshStatus}>
+              Réessayer
+            </Button>
+            <Button type="button" variant="ghost" onClick={restart}>
+              Nouveau projet
+            </Button>
+          </div>
+        </>
       )}
       {flow === 'done' && (
         <>
-          <h2>Projet en cours d’évaluation</h2>
+          <h2>{status === 'accepted' ? 'Projet accepté' : status === 'rejected' ? 'Projet non retenu' : 'Projet en attente'}</h2>
           <p className="project__muted">
-            Merci. Votre projet est en cours d’évaluation par Givaudan.
+            {status === 'accepted'
+              ? 'Votre projet a été accepté selon les critères provisoires de la démonstration. Le chat n’est pas encore disponible.'
+              : status === 'rejected'
+                ? 'Votre projet n’a pas été retenu selon les critères provisoires de la démonstration. La suite de ce parcours reste à définir.'
+                : 'Votre projet a été enregistré, mais son évaluation n’a pas pu être terminée. Aucun réessai automatique n’est encore prévu.'}
           </p>
+          {storageWarning && <p className="ui-field__error" role="alert">{storageWarning}</p>}
           <div className="project__actions">
-            <Button variant="ghost" onClick={restart}>
+            {storageWarning && <Button type="button" onClick={retrySavingAccess}>Enregistrer l’accès</Button>}
+            <Button type="button" variant="ghost" onClick={refreshStatus}>Actualiser le statut</Button>
+            <Button type="button" variant="ghost" onClick={restart}>
               Déposer un autre projet
             </Button>
           </div>

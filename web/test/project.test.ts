@@ -79,8 +79,10 @@ test('GivBot adapte son humeur et son message au parcours', () => {
     /retrouver/,
   );
   assert.equal(getBotSpeech('submitting', 'description', valid, false).mood, 'thinking');
-  const done = getBotSpeech('done', 'description', valid, false);
+  const done = getBotSpeech('done', 'description', valid, false, 'accepted');
   assert.equal(done.mood, 'happy');
   assert.match(done.message, /Camille/);
-  assert.match(done.message, /en cours d’évaluation/);
+  assert.match(done.message, /accepté/);
+  assert.match(getBotSpeech('done', 'description', valid, false, 'rejected').message, /critères/);
+  assert.match(getBotSpeech('done', 'description', valid, false, 'pending').message, /pas pu/);
 });

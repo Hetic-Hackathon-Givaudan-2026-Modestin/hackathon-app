@@ -9,8 +9,24 @@ import { once } from 'node:events';
 import { setTimeout as delay } from 'node:timers/promises';
 import { test } from 'node:test';
 import pg from 'pg';
+import { createScorer } from '../dist/scoring.js';
 
 const execFileAsync = promisify(execFile);
+
+test('le scoring utilise un délai de 120 secondes et signale les erreurs', async (t) => {
+  const project = {
+    fullName: 'Test', company: 'Exemple', email: 'test@example.com',
+    role: 'marketing', salesZone: 'europe', market: 'agro', quantity: 'small',
+    positioning: 'mid', workedWithGivaudan: false, description: 'Un projet de démonstration.',
+  };
+  const timeout = t.mock.method(AbortSignal, 'timeout', () => new AbortController().signal);
+  const fetchMock = t.mock.method(globalThis, 'fetch', async () => new Response('{"score":65}'));
+  const score = createScorer('http://localhost:8000');
+  assert.equal(await score(project), 65);
+  assert.equal(timeout.mock.calls[0].arguments[0], 120_000);
+  fetchMock.mock.mockImplementation(async () => { throw new Error('Délai dépassé'); });
+  await assert.rejects(score(project), /Délai dépassé/);
+});
 
 async function listen(server) {
   server.listen(0, '127.0.0.1');
@@ -48,6 +64,7 @@ test('API : base PostgreSQL et service IA simulé', { timeout: 60000 }, async (t
   const schema = `test_${randomUUID().replaceAll('-', '')}`;
   const admin = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   let mock;
+  let scoring;
   let child;
   let schemaCreated = false;
   let output = '';
@@ -95,6 +112,22 @@ test('API : base PostgreSQL et service IA simulé', { timeout: 60000 }, async (t
       res.end(JSON.stringify({ choices: [{ message: { content: 'Paris.' } }] }));
     });
     const mockPort = await listen(mock);
+    const scoringRequests = [];
+    let scoringResponse = { status: 200, body: { score: 80 } };
+    scoring = http.createServer(async (req, res) => {
+      const chunks = [];
+      for await (const chunk of req) chunks.push(chunk);
+      scoringRequests.push({
+        method: req.method,
+        url: req.url,
+        authorization: req.headers.authorization,
+        body: JSON.parse(Buffer.concat(chunks).toString()),
+      });
+      res.setHeader('content-type', 'application/json');
+      res.writeHead(scoringResponse.status);
+      res.end(JSON.stringify(scoringResponse.body));
+    });
+    const scoringPort = await listen(scoring);
     const port = await availablePort();
     const apiUrl = `http://127.0.0.1:${port}`;
     child = spawn(process.execPath, ['dist/index.js'], {
@@ -105,6 +138,8 @@ test('API : base PostgreSQL et service IA simulé', { timeout: 60000 }, async (t
         AI_BASE_URL: `http://127.0.0.1:${mockPort}/v1`,
         AI_MODEL: 'test-model',
         AI_API_KEY: 'test-key',
+        SCORING_BASE_URL: `http://127.0.0.1:${scoringPort}/`,
+        SCORING_API_KEY: 'scoring-key',
         PORT: String(port),
       },
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -348,7 +383,136 @@ test('API : base PostgreSQL et service IA simulé', { timeout: 60000 }, async (t
       const list = await fetch(`${apiUrl}/api/questions`);
       assert.equal((await list.json()).length, 1);
     });
+
+    const project = {
+      fullName: ' Camille Exemple ',
+      company: 'Exemple SA',
+      role: 'marketing',
+      email: 'Camille@Exemple.fr',
+      salesZone: 'europe',
+      market: 'perfume',
+      quantity: 'small',
+      positioning: 'premium',
+      workedWithGivaudan: false,
+      description: 'Un parfum d’intérieur inspiré des jardins méditerranéens.',
+    };
+    const createProject = (body) => fetch(`${apiUrl}/api/projects`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const readProject = (id, token) => fetch(`${apiUrl}/api/projects/${id}`, {
+      headers: token ? { authorization: `Bearer ${token}` } : {},
+    });
+    const projectRow = async (id) => {
+      const db = new pg.Pool({ connectionString: databaseUrl.toString() });
+      try {
+        return (await db.query('SELECT * FROM projects WHERE id = $1', [id])).rows[0];
+      } finally {
+        await db.end();
+      }
+    };
+
+    await t.test('accepte un projet dont le score atteint 65', async () => {
+      scoringResponse = { status: 200, body: { score: 65 } };
+      const response = await createProject(project);
+      assert.equal(response.status, 201);
+      assert.equal(response.headers.get('cache-control'), 'no-store');
+      const created = await response.json();
+      assert.equal(created.status, 'accepted');
+      assert.ok(created.accessToken.length >= 40);
+      assert.deepEqual(Object.keys(created).sort(), ['accessToken', 'id', 'status']);
+
+      const call = scoringRequests.at(-1);
+      assert.equal(call.url, '/score');
+      assert.equal(call.authorization, 'Bearer scoring-key');
+      assert.equal(call.body.market, 'perfume');
+      assert.equal(call.body.workedWithGivaudan, false);
+      assert.equal('email' in call.body, false);
+      assert.equal('fullName' in call.body, false);
+      assert.equal('company' in call.body, false);
+
+      const row = await projectRow(created.id);
+      assert.equal(row.score, 65);
+      assert.equal(row.decision_reason, 'score');
+      assert.equal(row.email, 'camille@exemple.fr');
+      assert.notEqual(row.access_token_hash, created.accessToken);
+      assert.ok(row.decided_at);
+    });
+
+    await t.test('refuse un projet dont le score est inférieur à 65', async () => {
+      scoringResponse = { status: 200, body: { score: 64 } };
+      const created = await (await createProject(project)).json();
+      assert.equal(created.status, 'rejected');
+      assert.equal((await projectRow(created.id)).score, 64);
+    });
+
+    await t.test('valide directement un client existant sans appeler le scoring', async () => {
+      const before = scoringRequests.length;
+      const created = await (await createProject({ ...project, workedWithGivaudan: true })).json();
+      assert.equal(created.status, 'accepted');
+      assert.equal(scoringRequests.length, before);
+      const row = await projectRow(created.id);
+      assert.equal(row.decision_reason, 'existing-client');
+      assert.equal(row.score, null);
+    });
+
+    await t.test('conserve le projet en attente si le scoring échoue', async () => {
+      for (const failure of [
+        { status: 503, body: { error: 'indisponible' } },
+        { status: 200, body: { score: 101 } },
+        { status: 200, body: { score: 'élevé' } },
+      ]) {
+        scoringResponse = failure;
+        const response = await createProject(project);
+        assert.equal(response.status, 201);
+        const created = await response.json();
+        assert.equal(created.status, 'pending');
+        const row = await projectRow(created.id);
+        assert.equal(row.score, null);
+        assert.equal(row.decided_at, null);
+      }
+    });
+
+    await t.test('refuse un projet invalide sans le scorer ni l’enregistrer', async () => {
+      const before = scoringRequests.length;
+      const response = await createProject({
+        ...project,
+        market: 'inconnu',
+        email: 'pas-un-email',
+        description: 'court',
+        workedWithGivaudan: 'oui',
+      });
+      assert.equal(response.status, 400);
+      const body = await response.json();
+      assert.deepEqual(body.fields.sort(), ['description', 'email', 'market', 'workedWithGivaudan']);
+      assert.equal(scoringRequests.length, before);
+    });
+
+    await t.test('retrouve le statut avec le jeton secret uniquement', async () => {
+      scoringResponse = { status: 200, body: { score: 90 } };
+      const created = await (await createProject(project)).json();
+
+      const ok = await readProject(created.id, created.accessToken);
+      assert.equal(ok.status, 200);
+      const data = await ok.json();
+      assert.equal(data.status, 'accepted');
+      assert.equal('score' in data, false);
+      assert.equal('email' in data, false);
+
+      assert.equal((await readProject(created.id)).status, 401);
+      assert.equal((await readProject(created.id, 'mauvais-jeton')).status, 401);
+      assert.equal((await readProject('pas-un-uuid', created.accessToken)).status, 401);
+      const other = await (await createProject(project)).json();
+      assert.equal((await readProject(created.id, other.accessToken)).status, 401);
+    });
   } finally {
+    if (scoring?.listening) {
+      scoring.closeAllConnections();
+      await new Promise((resolve, reject) =>
+        scoring.close((error) => (error ? reject(error) : resolve())),
+      );
+    }
     if (child && child.exitCode === null && child.signalCode === null) {
       const exited = once(child, 'exit');
       child.kill();

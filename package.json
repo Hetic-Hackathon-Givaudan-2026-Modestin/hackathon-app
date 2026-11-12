@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "concurrently -n api,web \"npm run dev -w api\" \"npm run dev -w web\"",
     "build": "npm run build --workspaces",
-    "test": "node --test api/test/integration.test.js web/test/project.test.ts"
+    "test": "node --test api/test/integration.test.js web/test/project.test.ts web/test/projectApi.test.ts"
   },
   "devDependencies": {
     "concurrently": "^10.0.6"
