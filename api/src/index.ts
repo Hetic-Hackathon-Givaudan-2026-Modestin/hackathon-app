@@ -2,6 +2,8 @@ import express, { type NextFunction, type Request, type Response } from 'express
 import pg from 'pg';
 import { hashPassword, parseRegistration } from './registration.js';
 import { authRouter } from './auth.js';
+import { projectsRouter } from './projects.js';
+import { createScorer } from './scoring.js';
 
 // En dev, la configuration vient de api/.env ; en production, de l'hébergeur
 try {
@@ -10,7 +12,14 @@ try {
   // Pas de .env : on garde l'environnement tel quel
 }
 
-const { DATABASE_URL, AI_BASE_URL, AI_MODEL, AI_API_KEY = '' } = process.env;
+const {
+  DATABASE_URL,
+  AI_BASE_URL,
+  AI_MODEL,
+  AI_API_KEY = '',
+  SCORING_BASE_URL,
+  SCORING_API_KEY = '',
+} = process.env;
 const PORT = Number(process.env.PORT ?? 3000);
 
 const db = new pg.Pool({ connectionString: DATABASE_URL });
@@ -70,6 +79,7 @@ app.post('/api/users', async (req, res) => {
 app.use(express.json());
 
 app.use('/api', authRouter(db));
+app.use('/api', projectsRouter(db, createScorer(SCORING_BASE_URL, SCORING_API_KEY)));
 
 app.get('/api/health', async (_req, res) => {
   const { rows } = await db.query('SELECT version()');

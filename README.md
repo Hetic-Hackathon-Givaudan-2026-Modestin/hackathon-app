@@ -14,9 +14,21 @@
 
 Le parcours projet, sans compte, est sur `/` : une première étape collecte les
 informations générales (dont « avez-vous déjà travaillé avec Givaudan ? »), une
-seconde la description du projet. Pour l'instant, rien n'est envoyé ni
-enregistré : GivBot affiche « en cours d'évaluation » pour tous les projets. Le
-stockage, l'évaluation et l'accès au chat viennent avec les prochains tickets.
+seconde la description du projet. Pour l'instant, le front n'envoie rien : GivBot
+affiche « en cours d'évaluation » pour tous les projets (branchement à l'API dans
+un prochain ticket).
+
+Côté API, `POST /api/projects` enregistre le projet et le décide : un client déjà
+passé chez Givaudan est accepté directement ; sinon le projet, sans nom, email ni
+entreprise, est envoyé à l'équipe data (`SCORING_BASE_URL`, `SCORING_API_KEY`, voir
+`api/.env.example`), qui retourne un score de 0 à 100. À partir de 65, il est
+accepté, sinon refusé ; si l'évaluation échoue, il reste `pending`. La réponse
+contient un jeton d'accès secret, affiché une seule fois (seul son hash est stocké),
+à envoyer en `Authorization: Bearer` sur `GET /api/projects/{id}` pour lire le
+statut. Le contrat de scoring (`POST /score`, réponse `{ "score": n }`) est
+provisoire jusqu'à validation par l'équipe data. Après mise à jour, relancez
+`npm run build` puis `npm run migrate -w api`.
+
 L'ancienne démo reste sur `/demo`. Les routes `/api/users` et `/api/session`
 existent toujours côté API mais ne sont plus utilisées par le front. L'intégration
 avec l'IA sera activée lorsque le contrat de l'API de l'équipe data sera validé.

@@ -153,13 +153,128 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /api/projects:
+    post:
+      summary: Dépose un projet, l'évalue et l'enregistre
+      description: >-
+        Un client déjà passé chez Givaudan est accepté directement. Sinon le
+        projet (sans nom, email ni entreprise) est envoyé à l'équipe data, qui
+        retourne un score de 0 à 100 ; à partir de 65, le projet est accepté,
+        sinon refusé. Si l'évaluation échoue, le projet reste en attente.
+        Le jeton d'accès n'est retourné qu'ici.
+      operationId: createProject
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectRequest'
+      responses:
+        '201':
+          description: Projet enregistré
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedProject'
+        '400':
+          description: Informations invalides ; `fields` liste les champs en cause
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '415':
+          description: Le contenu n'est pas du JSON
+        '429':
+          description: Trop de projets envoyés depuis cette adresse
+  /api/projects/{id}:
+    get:
+      summary: Retourne le statut d'un projet
+      operationId: getProject
+      security:
+        - projectToken: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Statut du projet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '401':
+          description: Jeton absent ou invalide pour ce projet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 components:
   securitySchemes:
+    projectToken:
+      type: http
+      scheme: bearer
     sessionCookie:
       type: apiKey
       in: cookie
       name: givbot_session
   schemas:
+    CreateProjectRequest:
+      type: object
+      required:
+        - fullName
+        - company
+        - role
+        - email
+        - salesZone
+        - market
+        - quantity
+        - positioning
+        - workedWithGivaudan
+        - description
+      properties:
+        fullName: { type: string, maxLength: 200 }
+        company: { type: string, maxLength: 200 }
+        role:
+          type: string
+          enum: [rd, marketing, purchasing, management, other]
+        email: { type: string, format: email, maxLength: 254 }
+        salesZone:
+          type: string
+          enum: [france, europe, north-america, asia, other]
+        market:
+          type: string
+          enum: [agro, perfume, beauty, home, other]
+        quantity:
+          type: string
+          enum: [sample, small, medium, large]
+        positioning:
+          type: string
+          enum: [entry, mid, premium]
+        workedWithGivaudan: { type: boolean }
+        description: { type: string, minLength: 20, maxLength: 4000 }
+    CreatedProject:
+      type: object
+      required: [id, status, accessToken]
+      properties:
+        id: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/ProjectStatus' }
+        accessToken:
+          type: string
+          description: Secret à conserver côté client ; il n'est jamais renvoyé.
+    Project:
+      type: object
+      required: [id, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/ProjectStatus' }
+        createdAt: { type: string, format: date-time }
+    ProjectStatus:
+      type: string
+      enum: [pending, accepted, rejected]
     CreateUserRequest:
       type: object
       required: [fullName, email, company, sector, role, password]

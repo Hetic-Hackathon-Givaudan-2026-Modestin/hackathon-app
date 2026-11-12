@@ -28,6 +28,7 @@ Présentation du projet et démarrage du Dev Container : [README.md](README.md).
 - Les routes `/api/users` et `/api/session` restent côté API mais ne sont plus utilisées par le front.
 - Les migrations SQL de [db/migrations/](db/migrations/) s'appliquent avec `npm run build` puis `npm run migrate -w api`, y compris sur une base déjà initialisée.
 - Le front n'appelle jamais l'API des data : il passe par notre API.
+- Projets : `POST /api/projects` (règle : déjà client = accepté, sinon score data ≥ 65) et `GET /api/projects/{id}` avec le jeton Bearer retourné à la création ; le scoring est dans [api/src/scoring.ts](api/src/scoring.ts), son contrat est provisoire et il ne reçoit ni nom, ni email, ni entreprise.
 
 ## Décisions
 
