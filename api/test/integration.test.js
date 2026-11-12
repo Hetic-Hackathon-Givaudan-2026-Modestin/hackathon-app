@@ -9,8 +9,24 @@ import { once } from 'node:events';
 import { setTimeout as delay } from 'node:timers/promises';
 import { test } from 'node:test';
 import pg from 'pg';
+import { createScorer } from '../dist/scoring.js';
 
 const execFileAsync = promisify(execFile);
+
+test('le scoring utilise un délai de 120 secondes et signale les erreurs', async (t) => {
+  const project = {
+    fullName: 'Test', company: 'Exemple', email: 'test@example.com',
+    role: 'marketing', salesZone: 'europe', market: 'agro', quantity: 'small',
+    positioning: 'mid', workedWithGivaudan: false, description: 'Un projet de démonstration.',
+  };
+  const timeout = t.mock.method(AbortSignal, 'timeout', () => new AbortController().signal);
+  const fetchMock = t.mock.method(globalThis, 'fetch', async () => new Response('{"score":65}'));
+  const score = createScorer('http://localhost:8000');
+  assert.equal(await score(project), 65);
+  assert.equal(timeout.mock.calls[0].arguments[0], 120_000);
+  fetchMock.mock.mockImplementation(async () => { throw new Error('Délai dépassé'); });
+  await assert.rejects(score(project), /Délai dépassé/);
+});
 
 async function listen(server) {
   server.listen(0, '127.0.0.1');

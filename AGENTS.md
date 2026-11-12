@@ -14,7 +14,7 @@ Présentation du projet et démarrage du Dev Container : [README.md](README.md).
 
 - Les routes de l'API sont dans [api/src/index.ts](api/src/index.ts) ; le front utilise `/api`, transmis à l'API par le proxy [web/vite.config.ts](web/vite.config.ts).
 - Les scripts [db/init/](db/init/) ne s'exécutent qu'à la première initialisation de PostgreSQL : les modifier ne met pas à jour une base existante.
-- Ollama est hébergé par l'équipe data. N'ajoute pas de service de modèle local ; l'intégration utilise leur API via ngrok une fois son contrat validé. Le modèle réel n'est pas testé par `npm test`.
+- L'API consomme un service de scoring configuré par `SCORING_BASE_URL`. En développement, il peut être démarré sur l'hôte et joint par `host.docker.internal:8000` depuis le Dev Container. `npm test` utilise un service simulé, pas le modèle réel.
 - Pour une tâche suivie dans GitHub, consulte son ticket et ses critères avant de modifier le code ; les modèles sont dans [.github/ISSUE_TEMPLATE/](.github/ISSUE_TEMPLATE/).
 - Les changements destinés à `develop` passent par une pull request ; ne pousse pas directement sur cette branche.
 
@@ -23,11 +23,11 @@ Présentation du projet et démarrage du Dev Container : [README.md](README.md).
 - Structure de [web/src/](web/src/) : `pages/` (une page par route, déclarées dans `App.tsx` avec React Router), `components/` (blocs de l'interface), `components/ui/` (champs et boutons réutilisables), `hooks/` et `lib/` (logique et validation sans JSX).
 - Réutilise `Button`, `TextField`, `SelectField`, `TextareaField`, `RadioGroupField`, `CheckboxField` et `Stepper` de `components/ui/` plutôt que de recréer des champs ; un nouveau champ passe par `FieldShell` (libellé, erreur, accessibilité).
 - Les couleurs et le rayon viennent des variables CSS de `styles/global.css` (bordeaux et or Givaudan) ; chaque composant a son CSS à côté, avec des classes préfixées (`ui-`, `project__`, `givbot`).
-- Routes actuelles : `/` (parcours projet sans compte, en deux étapes) et `/demo`. Ce parcours n'appelle pas encore l'API ; les options des listes de `lib/project.ts` sont provisoires.
+- Routes actuelles : `/` (parcours projet sans compte, en deux étapes) et `/demo`. Le parcours utilise notre API projet et conserve l'accès au dernier projet dans le stockage local ; les options des listes de `lib/project.ts` sont provisoires.
 - GivBot (`components/GivBot.tsx`) a quatre humeurs (`greeting`, `listening`, `thinking`, `happy`) ; ses messages courtois viennent de `lib/givbotSpeech.ts`. Toute animation doit respecter `prefers-reduced-motion`. Le modèle 3D, développé par une autre équipe, nécessitera un ADR avant toute dépendance 3D.
 - Les routes `/api/users` et `/api/session` restent côté API mais ne sont plus utilisées par le front.
 - Les migrations SQL de [db/migrations/](db/migrations/) s'appliquent avec `npm run build` puis `npm run migrate -w api`, y compris sur une base déjà initialisée.
-- Le front n'appelle jamais l'API des data : il passe par notre API.
+- Le front n'appelle jamais le service de scoring directement : il passe par notre API.
 - Projets : `POST /api/projects` (règle : déjà client = accepté, sinon score data ≥ 65) et `GET /api/projects/{id}` avec le jeton Bearer retourné à la création ; le scoring est dans [api/src/scoring.ts](api/src/scoring.ts), son contrat est provisoire et il ne reçoit ni nom, ni email, ni entreprise.
 
 ## Décisions

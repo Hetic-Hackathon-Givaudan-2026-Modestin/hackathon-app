@@ -2,10 +2,9 @@ import type { ProjectInput } from './project.js';
 
 export type Scorer = (project: ProjectInput) => Promise<number>;
 
-const TIMEOUT_MS = 30_000;
+const TIMEOUT_MS = 120_000;
 
-// Contrat provisoire avec l'équipe data : POST {SCORING_BASE_URL}/score avec le
-// projet, réponse { "score": <nombre de 0 à 100> }. À aligner une fois le contrat validé.
+// Contrat provisoire : POST {SCORING_BASE_URL}/score, réponse { "score": 0-100 }.
 export function createScorer(baseUrl: string | undefined, apiKey = ''): Scorer {
   return async (project) => {
     if (!baseUrl) throw new Error("SCORING_BASE_URL n'est pas configuré.");
@@ -15,7 +14,6 @@ export function createScorer(baseUrl: string | undefined, apiKey = ''): Scorer {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'ngrok-skip-browser-warning': 'true',
         ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
       },
       body: JSON.stringify(criteria),
