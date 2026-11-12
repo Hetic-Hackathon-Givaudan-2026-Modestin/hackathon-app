@@ -21,9 +21,11 @@ Présentation du projet et démarrage du Dev Container : [README.md](README.md).
 ## Front (React)
 
 - Structure de [web/src/](web/src/) : `pages/` (une page par route, déclarées dans `App.tsx` avec React Router), `components/` (blocs de l'interface), `components/ui/` (champs et boutons réutilisables), `hooks/` et `lib/` (logique et validation sans JSX).
-- Réutilise `Button`, `TextField`, `PasswordField`, `SelectField` et `CheckboxField` de `components/ui/` plutôt que de recréer des champs ; un nouveau champ passe par `FieldShell` (libellé, erreur, accessibilité).
-- Les couleurs et le rayon viennent des variables CSS de `styles/global.css` ; chaque composant a son CSS à côté, avec des classes préfixées (`ui-`, `auth__`).
-- Routes actuelles : `/` (accueil connecté), `/profil`, `/demo`, `/inscription`, `/connexion`. L'inscription utilise `/api/users` ; la connexion et la déconnexion utilisent `/api/session`.
+- Réutilise `Button`, `TextField`, `SelectField`, `TextareaField`, `RadioGroupField`, `CheckboxField` et `Stepper` de `components/ui/` plutôt que de recréer des champs ; un nouveau champ passe par `FieldShell` (libellé, erreur, accessibilité).
+- Les couleurs et le rayon viennent des variables CSS de `styles/global.css` (bordeaux et or Givaudan) ; chaque composant a son CSS à côté, avec des classes préfixées (`ui-`, `project__`, `givbot`).
+- Routes actuelles : `/` (parcours projet sans compte, en deux étapes) et `/demo`. Ce parcours n'appelle pas encore l'API ; les options des listes de `lib/project.ts` sont provisoires.
+- GivBot (`components/GivBot.tsx`) a quatre humeurs (`greeting`, `listening`, `thinking`, `happy`) ; ses messages courtois viennent de `lib/givbotSpeech.ts`. Toute animation doit respecter `prefers-reduced-motion`. Le modèle 3D, développé par une autre équipe, nécessitera un ADR avant toute dépendance 3D.
+- Les routes `/api/users` et `/api/session` restent côté API mais ne sont plus utilisées par le front.
 - Les migrations SQL de [db/migrations/](db/migrations/) s'appliquent avec `npm run build` puis `npm run migrate -w api`, y compris sur une base déjà initialisée.
 - Le front n'appelle jamais l'API des data : il passe par notre API.
 

@@ -10,15 +10,16 @@
 
 1. Clonez le dépôt et ouvrez le dossier dans VS Code.
 2. Lancez **Dev Containers: Reopen in Container** depuis la palette de commandes. À la création du conteneur, les dépendances sont installées et `api/.env` est copié depuis `api/.env.example`. Si ce fichier existait déjà, retirez ses anciennes variables `AI_*` qui visaient le conteneur Ollama local.
-3. Dans le terminal du conteneur, lancez `npm run build`, puis `npm run migrate -w api` pour créer les tables des comptes et des sessions. Les migrations sont relançables et conservent les données existantes. Lancez ensuite `npm run dev` et ouvrez [http://localhost:5173/inscription](http://localhost:5173/inscription).
+3. Dans le terminal du conteneur, lancez `npm run build`, puis `npm run migrate -w api` (les migrations sont relançables et conservent les données existantes). Lancez ensuite `npm run dev` et ouvrez [http://localhost:5173](http://localhost:5173).
 
-L'inscription crée un compte. Connectez-vous ensuite sur `/connexion` pour
-accéder à l'accueil et au profil ; la session expire après 12 heures.
-La déconnexion est disponible sur le profil. Le bouton de commande est indicatif :
-la fonctionnalité n'est pas encore disponible. L'ancienne démo reste sur `/demo`.
-Les conditions d'utilisation sont à définir : leur case est inactive et aucune
-acceptation n'est enregistrée. L'intégration avec l'IA sera activée lorsque le
-contrat de l'API de l'équipe data sera validé.
+Le parcours projet, sans compte, est sur `/` : une première étape collecte les
+informations générales (dont « avez-vous déjà travaillé avec Givaudan ? »), une
+seconde la description du projet. Pour l'instant, rien n'est envoyé ni
+enregistré : GivBot affiche « en cours d'évaluation » pour tous les projets. Le
+stockage, l'évaluation et l'accès au chat viennent avec les prochains tickets.
+L'ancienne démo reste sur `/demo`. Les routes `/api/users` et `/api/session`
+existent toujours côté API mais ne sont plus utilisées par le front. L'intégration
+avec l'IA sera activée lorsque le contrat de l'API de l'équipe data sera validé.
 
 Les cookies de session sont HttpOnly et SameSite=Strict, et Secure lorsque
 `NODE_ENV=production` : dans ce cas, HTTPS est nécessaire. La limitation de

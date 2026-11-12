@@ -6,7 +6,11 @@ export function useFormValues<T extends Record<string, string | boolean>>(
 ) {
   const [values, setValues] = useState<T>(initial);
 
-  function onChange(event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
+  function onChange(
+    event: ChangeEvent<
+      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+    >,
+  ) {
     const { name, type, value, checked } = event.target as HTMLInputElement;
     setValues((current) => ({
       ...current,
