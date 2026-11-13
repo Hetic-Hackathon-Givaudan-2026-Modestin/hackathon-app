@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { ProjectLayout } from '../components/ProjectLayout';
+import { ProjectChat } from '../components/ProjectChat';
 import { Button } from '../components/ui/Button';
 import { RadioGroupField } from '../components/ui/RadioGroupField';
 import { SelectField } from '../components/ui/SelectField';
 import { Stepper } from '../components/ui/Stepper';
 import { TextField } from '../components/ui/TextField';
-import { TextareaField } from '../components/ui/TextareaField';
 import { useFormValues } from '../hooks/useFormValues';
 import { getBotSpeech, type FlowState } from '../lib/givbotSpeech';
 import {
@@ -18,11 +18,13 @@ import {
   type ProjectStatus,
 } from '../lib/projectApi';
 import {
-  MAX_DESCRIPTION_LENGTH,
   initialProject,
+  launchTimingOptions,
   marketOptions,
   positioningOptions,
-  quantityOptions,
+  projectStageOptions,
+  projectStepLabels,
+  projectSteps,
   roleOptions,
   salesZoneOptions,
   validateStep,
@@ -30,8 +32,15 @@ import {
   type ProjectStep,
 } from '../lib/project';
 
-const steps: ProjectStep[] = ['general', 'description'];
-const stepLabels = ['Votre projet', 'Description'];
+const questionTitles: Record<Exclude<ProjectStep, 'general'>, string> = {
+  product: 'Quel type de produit souhaitez-vous développer ?',
+  budget: 'Quel budget prévoyez-vous par kg d’arôme ?',
+  volume: 'Quel volume d’arôme pensez-vous acheter sur un an ?',
+  salesZone: 'Où le produit sera-t-il vendu ?',
+  stage: 'À quel stade d’avancement se trouve le projet ?',
+  launch: 'Quand souhaitez-vous lancer le produit ?',
+  positioning: 'Comment positionnez-vous le produit ?',
+};
 
 export function ProjectPage() {
   const { values, onChange, reset } = useFormValues(initialProject);
@@ -43,8 +52,9 @@ export function ProjectPage() {
   const [message, setMessage] = useState('');
   const [storageWarning, setStorageWarning] = useState('');
   const [restoreVersion, setRestoreVersion] = useState(0);
+  const [showChat, setShowChat] = useState(false);
   const submitting = useRef(false);
-  const step = steps[stepIndex];
+  const step = projectSteps[stepIndex]!;
 
   useEffect(() => {
     let saved: ProjectAccess | null;
@@ -100,7 +110,7 @@ export function ProjectPage() {
       setAttempted(true);
       return;
     }
-    if (stepIndex < steps.length - 1) {
+    if (stepIndex < projectSteps.length - 1) {
       goTo(stepIndex + 1);
       return;
     }
@@ -167,11 +177,15 @@ export function ProjectPage() {
   const title =
     flow === 'done' ? 'Merci pour votre projet' : 'Définissons votre projet';
 
+  if (showChat && access) {
+    return <ProjectChat access={access} onBack={() => setShowChat(false)} />;
+  }
+
   return (
     <ProjectLayout title={title} bubble={speech.message} mood={speech.mood}>
       {flow === 'form' && (
         <>
-          <Stepper steps={stepLabels} current={stepIndex} />
+          <Stepper steps={projectStepLabels} current={stepIndex} />
           {message && <p className="ui-field__error" role="alert">{message}</p>}
           {storageWarning && <p className="ui-field__error" role="alert">{storageWarning}</p>}
           {access && <p className="project__muted">Un nouvel envoi remplacera l’accès au projet précédent dans ce navigateur.</p>}
@@ -218,46 +232,6 @@ export function ProjectPage() {
                     onChange={onChange}
                     error={errors.email}
                   />
-                  <SelectField
-                    id="salesZone"
-                    name="salesZone"
-                    label="Où souhaitez-vous vendre ?"
-                    placeholder="Choisissez"
-                    options={salesZoneOptions}
-                    value={values.salesZone}
-                    onChange={onChange}
-                    error={errors.salesZone}
-                  />
-                  <SelectField
-                    id="market"
-                    name="market"
-                    label="Marché visé"
-                    placeholder="Choisissez"
-                    options={marketOptions}
-                    value={values.market}
-                    onChange={onChange}
-                    error={errors.market}
-                  />
-                  <SelectField
-                    id="quantity"
-                    name="quantity"
-                    label="Quantité envisagée"
-                    placeholder="Choisissez"
-                    options={quantityOptions}
-                    value={values.quantity}
-                    onChange={onChange}
-                    error={errors.quantity}
-                  />
-                  <SelectField
-                    id="positioning"
-                    name="positioning"
-                    label="Positionnement"
-                    placeholder="Choisissez"
-                    options={positioningOptions}
-                    value={values.positioning}
-                    onChange={onChange}
-                    error={errors.positioning}
-                  />
                 </div>
                 <RadioGroupField
                   name="workedWithGivaudan"
@@ -273,19 +247,114 @@ export function ProjectPage() {
               </>
             ) : (
               <>
-                <h2>Décrivez votre projet</h2>
-                <TextareaField
-                  id="description"
-                  name="description"
-                  label="Description du projet"
-                  maxLength={MAX_DESCRIPTION_LENGTH}
-                  value={values.description}
-                  onChange={onChange}
-                  error={errors.description}
-                />
-                <p className="project__counter">
-                  {values.description.length} / {MAX_DESCRIPTION_LENGTH}
-                </p>
+                <h2>{questionTitles[step]}</h2>
+                {step === 'product' && (
+                  <>
+                    <SelectField
+                      id="market"
+                      name="market"
+                      label="Secteur du produit"
+                      placeholder="Choisissez"
+                      options={marketOptions}
+                      value={values.market}
+                      onChange={onChange}
+                      error={errors.market}
+                    />
+                    <TextField
+                      id="productType"
+                      name="productType"
+                      label="Type de produit (ex. boisson gazeuse, yaourt)"
+                      value={values.productType}
+                      onChange={onChange}
+                      error={errors.productType}
+                      maxLength={200}
+                    />
+                  </>
+                )}
+                {step === 'budget' && (
+                  <>
+                    <TextField
+                      id="budgetPerKg"
+                      name="budgetPerKg"
+                      label="Budget prévu par kg d’arôme"
+                      type="number"
+                      min="0.01"
+                      max="1000000"
+                      step="0.01"
+                      value={values.budgetPerKg}
+                      onChange={onChange}
+                      error={errors.budgetPerKg}
+                      trailing={<span>€/kg</span>}
+                    />
+                    <p className="project__muted">Laissez vide si le budget n’est pas encore défini.</p>
+                  </>
+                )}
+                {step === 'volume' && (
+                  <>
+                    <TextField
+                      id="annualVolumeKg"
+                      name="annualVolumeKg"
+                      label="Volume d’arôme acheté en un an"
+                      type="number"
+                      min="0.01"
+                      max="1000000000"
+                      step="0.01"
+                      value={values.annualVolumeKg}
+                      onChange={onChange}
+                      error={errors.annualVolumeKg}
+                      trailing={<span>kg/an</span>}
+                    />
+                    <p className="project__muted">Il s’agit du volume d’arôme acheté, pas du volume de produit fabriqué. Laissez vide si vous ne le connaissez pas encore.</p>
+                  </>
+                )}
+                {step === 'salesZone' && (
+                  <SelectField
+                    id="salesZone"
+                    name="salesZone"
+                    label="Zone géographique de vente"
+                    placeholder="Choisissez"
+                    options={salesZoneOptions}
+                    value={values.salesZone}
+                    onChange={onChange}
+                    error={errors.salesZone}
+                  />
+                )}
+                {step === 'stage' && (
+                  <SelectField
+                    id="projectStage"
+                    name="projectStage"
+                    label="Avancement du projet"
+                    placeholder="Choisissez"
+                    options={projectStageOptions}
+                    value={values.projectStage}
+                    onChange={onChange}
+                    error={errors.projectStage}
+                  />
+                )}
+                {step === 'launch' && (
+                  <SelectField
+                    id="launchTiming"
+                    name="launchTiming"
+                    label="Date de lancement souhaitée"
+                    placeholder="Choisissez"
+                    options={launchTimingOptions}
+                    value={values.launchTiming}
+                    onChange={onChange}
+                    error={errors.launchTiming}
+                  />
+                )}
+                {step === 'positioning' && (
+                  <SelectField
+                    id="positioning"
+                    name="positioning"
+                    label="Positionnement prix / gamme"
+                    placeholder="Choisissez"
+                    options={positioningOptions}
+                    value={values.positioning}
+                    onChange={onChange}
+                    error={errors.positioning}
+                  />
+                )}
                 <div className="project__actions">
                   <Button
                     type="button"
@@ -294,7 +363,9 @@ export function ProjectPage() {
                   >
                     Retour
                   </Button>
-                  <Button type="submit">Envoyer mon projet</Button>
+                  <Button type="submit">
+                    {stepIndex === projectSteps.length - 1 ? 'Envoyer mon projet' : 'Continuer'}
+                  </Button>
                 </div>
               </>
             )}
@@ -329,13 +400,14 @@ export function ProjectPage() {
           <h2>{status === 'accepted' ? 'Projet accepté' : status === 'rejected' ? 'Projet non retenu' : 'Projet en attente'}</h2>
           <p className="project__muted">
             {status === 'accepted'
-              ? 'Votre projet a été accepté selon les critères provisoires de la démonstration. Le chat n’est pas encore disponible.'
+              ? 'Votre projet a été accepté selon les critères provisoires de la démonstration. Vous pouvez maintenant échanger avec GivBot.'
               : status === 'rejected'
                 ? 'Votre projet n’a pas été retenu selon les critères provisoires de la démonstration. La suite de ce parcours reste à définir.'
                 : 'Votre projet a été enregistré, mais son évaluation n’a pas pu être terminée. Aucun réessai automatique n’est encore prévu.'}
           </p>
           {storageWarning && <p className="ui-field__error" role="alert">{storageWarning}</p>}
           <div className="project__actions">
+            {status === 'accepted' && access && <Button type="button" onClick={() => setShowChat(true)}>Discuter avec GivBot</Button>}
             {storageWarning && <Button type="button" onClick={retrySavingAccess}>Enregistrer l’accès</Button>}
             <Button type="button" variant="ghost" onClick={refreshStatus}>Actualiser le statut</Button>
             <Button type="button" variant="ghost" onClick={restart}>

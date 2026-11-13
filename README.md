@@ -19,13 +19,19 @@ hôte, port 8000, ainsi qu'Ollama. Dans le Dev Container, l'adresse du service e
 variable manuellement, car modifier `api/.env.example` ne le met pas à jour.
 Si le service exige une clé, configurez aussi `SCORING_API_KEY` avec sa clé.
 Redémarrez `npm run dev` après modification de la configuration.
+Pour la démonstration du chat, démarrez le service IA avec
+`COLLECTION_NAME=givbot-demo` et vérifiez que son endpoint `/health` indique
+une collection non vide. La collection doit avoir été indexée au préalable.
 
-Le parcours projet, sans compte, est sur `/` : une première étape collecte les
-informations générales (dont « avez-vous déjà travaillé avec Givaudan ? »), une
-seconde la description du projet. Le front envoie le formulaire à notre API,
-affiche l'évaluation en cours puis le statut accepté, refusé ou en attente.
-Les critères sont provisoires et le chat ainsi que la suite du parcours de refus
-ne sont pas encore disponibles.
+Le parcours projet, sans compte, est sur `/` : après les informations générales
+(dont « avez-vous déjà travaillé avec Givaudan ? »), GivBot pose successivement
+des questions sur le type de produit, le budget par kg d'arôme, le volume annuel
+d'arôme acheté, la zone de vente, l'avancement, la date de lancement et le
+positionnement. Le budget et le volume peuvent rester non définis. Le brief
+structuré est envoyé à notre API, qui affiche ensuite le statut accepté, refusé
+ou en attente.
+Les projets acceptés peuvent ouvrir le chat avec GivBot ; la suite du parcours
+de refus reste à définir. Les critères sont provisoires.
 
 Le navigateur conserve localement l'identifiant et le jeton du dernier projet
 pour retrouver son statut après fermeture ou rechargement. Un nouvel envoi
@@ -42,13 +48,45 @@ accepté, sinon refusé ; si l'évaluation échoue, il reste `pending`. La répo
 contient un jeton d'accès secret, affiché une seule fois (seul son hash est stocké),
 à envoyer en `Authorization: Bearer` sur `GET /api/projects/{id}` pour lire le
 statut. Le contrat de scoring (`POST /score`, réponse `{ "score": n }`) est
-provisoire. Après mise à jour, relancez
+provisoire. Le nom, l'email et l'entreprise ne sont pas transmis au scoring ;
+les nouvelles réponses de brief le sont. À titre provisoire, un projet à moins
+ou égal à 100 kg d'arôme/an positionné entrée de gamme, ou à partir de 5 000 kg/an
+positionné premium, perd 10 points. Le budget €/kg est transmis comme contexte
+et n'ajoute pas de points à lui seul. Ces seuils et pénalités sont à faire
+valider par l'équipe métier. Après mise à jour, relancez
 `npm run build` puis `npm run migrate -w api`.
 
 L'évaluation est synchrone et attend au plus 120 secondes. En cas de délai
 dépassé ou d'erreur, le projet reste en attente : aucun réessai automatique
 n'est actuellement prévu. Les scores et critères sont provisoires et destinés
 à la démonstration ; ils ne constituent pas une décision métier validée.
+Le service IA local effectue jusqu'à trois tentatives d'extraction en demandant
+au modèle de corriger ses réponses invalides ; il renvoie une erreur si aucune
+réponse n'est vérifiable.
+
+Pour une démonstration, il est possible de remplacer temporairement uniquement le
+scoring par Claude : ajoutez `SCORING_PROVIDER=claude` et
+`ANTHROPIC_API_KEY=...` dans `api/.env` (avec `ANTHROPIC_MODEL` facultatif).
+La clé reste côté API, et le chat continue d'utiliser le service configuré par
+`SCORING_BASE_URL`. Retirez `SCORING_PROVIDER` pour rétablir le service de
+scoring habituel.
+
+Pour une présentation uniquement, `DEMO_ACCEPT_PROJECTS=true npm run dev`
+accepte les projets sans évaluation ni score. La réponse de création contient
+`demoMode: true` et ces projets sont enregistrés sans score ni motif de décision.
+Ne pas utiliser ce mode pour des projets réels ; redémarrer sans cette variable
+pour rétablir l'évaluation normale.
+
+Le chat utilise le même service IA (`POST /ask`), avec le jeton du projet et
+uniquement si son statut est accepté. La description du projet et les messages
+sont transmis au service IA : évitez d'y saisir des informations sensibles.
+Les messages sont enregistrés dans PostgreSQL et l'historique du service IA est
+lié au projet. La base documentaire de l'IA doit être chargée pour répondre.
+Le contenu, les références et l'aperçu sensoriel sont fictifs ; la fiche et la
+commande ne sont pas disponibles. Relancez la migration après mise à jour.
+En cas d'erreur après l'envoi, actualisez la conversation avant de réessayer :
+le service IA et PostgreSQL tiennent chacun un historique, qui peut diverger
+si une réponse est perdue ou si l'enregistrement échoue.
 
 L'ancienne démo reste sur `/demo`. Les routes `/api/users` et `/api/session`
 existent toujours côté API mais ne sont plus utilisées par le front.

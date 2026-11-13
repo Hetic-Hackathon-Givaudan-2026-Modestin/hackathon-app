@@ -1,4 +1,4 @@
-import type { ProjectValues } from './project';
+import type { ProjectValues } from './project.ts';
 
 export type ProjectStatus = 'accepted' | 'rejected' | 'pending';
 export type ProjectAccess = { id: string; accessToken: string };
@@ -48,6 +48,8 @@ export async function createProject(values: ProjectValues): Promise<CreatedProje
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         ...values,
+        budgetPerKg: values.budgetPerKg.trim() ? Number(values.budgetPerKg) : null,
+        annualVolumeKg: values.annualVolumeKg.trim() ? Number(values.annualVolumeKg) : null,
         workedWithGivaudan: values.workedWithGivaudan === 'yes',
       }),
       signal: AbortSignal.timeout(135_000),

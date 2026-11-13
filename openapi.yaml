@@ -158,7 +158,7 @@ paths:
       summary: Dépose un projet, l'évalue et l'enregistre
       description: >-
         Un client déjà passé chez Givaudan est accepté directement. Sinon le
-        projet (sans nom, email ni entreprise) est envoyé à l'équipe data, qui
+        projet (sans nom, email ni entreprise) est envoyé au service de scoring, qui
         retourne un score de 0 à 100 ; à partir de 65, le projet est accepté,
         sinon refusé. Si l'évaluation échoue, le projet reste en attente.
         Le jeton d'accès n'est retourné qu'ici.
@@ -212,6 +212,79 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /api/projects/{id}/chat:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      summary: Retrouve le brief et les messages d'un projet accepté
+      security:
+        - projectToken: []
+      responses:
+        '200':
+          description: Brief et messages dans l'ordre chronologique
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [project, messages]
+                properties:
+                  project:
+                    type: object
+                    required:
+                      - market
+                      - productType
+                      - budgetPerKg
+                      - annualVolumeKg
+                      - salesZone
+                      - positioning
+                      - projectStage
+                      - launchTiming
+                      - description
+                    properties:
+                      market: { type: string }
+                      productType: { type: string }
+                      budgetPerKg: { type: number, nullable: true }
+                      annualVolumeKg: { type: number, nullable: true }
+                      salesZone: { type: string }
+                      positioning: { type: string }
+                      projectStage: { type: string }
+                      launchTiming: { type: string }
+                      description: { type: string }
+                  messages:
+                    type: array
+                    items: { $ref: '#/components/schemas/ChatMessage' }
+        '401': { description: Jeton invalide }
+        '403': { description: Projet non accepté }
+    post:
+      summary: Envoie un message à GivBot pour un projet accepté
+      security:
+        - projectToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message: { type: string, minLength: 1, maxLength: 4000 }
+      responses:
+        '200':
+          description: Réponse de GivBot
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [answer]
+                properties:
+                  answer: { type: string }
+        '400': { description: Message invalide }
+        '401': { description: Jeton invalide }
+        '403': { description: Projet non accepté }
+        '502': { description: Service IA indisponible ou réponse invalide }
 components:
   securitySchemes:
     projectToken:
@@ -222,6 +295,12 @@ components:
       in: cookie
       name: givbot_session
   schemas:
+    ChatMessage:
+      type: object
+      required: [role, content]
+      properties:
+        role: { type: string, enum: [user, assistant] }
+        content: { type: string }
     CreateProjectRequest:
       type: object
       required:
@@ -231,10 +310,13 @@ components:
         - email
         - salesZone
         - market
-        - quantity
+        - productType
+        - budgetPerKg
+        - annualVolumeKg
         - positioning
+        - projectStage
+        - launchTiming
         - workedWithGivaudan
-        - description
       properties:
         fullName: { type: string, maxLength: 200 }
         company: { type: string, maxLength: 200 }
@@ -248,14 +330,30 @@ components:
         market:
           type: string
           enum: [agro, perfume, beauty, home, other]
-        quantity:
-          type: string
-          enum: [sample, small, medium, large]
+        productType: { type: string, minLength: 1, maxLength: 200 }
+        budgetPerKg:
+          type: number
+          nullable: true
+          exclusiveMinimum: 0
+          maximum: 1000000
+          description: Budget €/kg d’arôme ; null si non défini.
+        annualVolumeKg:
+          type: number
+          nullable: true
+          exclusiveMinimum: 0
+          maximum: 1000000000
+          description: Volume annuel acheté en kg d’arôme ; null si non défini.
         positioning:
           type: string
           enum: [entry, mid, premium]
+        projectStage:
+          type: string
+          enum: [idea, development, testing, ready, launched, unknown]
+        launchTiming:
+          type: string
+          enum: [under-6-months, 6-12-months, 1-2-years, over-2-years, unknown]
         workedWithGivaudan: { type: boolean }
-        description: { type: string, minLength: 20, maxLength: 4000 }
+      description: Le résumé transmis au scoring est généré par l'API depuis les réponses structurées.
     CreatedProject:
       type: object
       required: [id, status, accessToken]

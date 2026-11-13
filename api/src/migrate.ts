@@ -13,7 +13,13 @@ if (!process.env.DATABASE_URL) {
 
 const db = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 try {
-  for (const name of ['001-users.sql', '002-sessions.sql', '003-projects.sql']) {
+  for (const name of [
+    '001-users.sql',
+    '002-sessions.sql',
+    '003-projects.sql',
+    '004-project-chat.sql',
+    '005-guided-project-brief.sql',
+  ]) {
     const migration = await readFile(
       new URL(`../../db/migrations/${name}`, import.meta.url),
       'utf8',

@@ -17,8 +17,9 @@ const values = {
   ...initialProject,
   fullName: 'Camille Exemple', company: 'Exemple', role: 'marketing',
   email: 'camille@example.fr', salesZone: 'europe', market: 'agro',
-  quantity: 'small', positioning: 'mid', workedWithGivaudan: 'yes',
-  description: 'Un projet de boisson au citron.',
+  productType: 'boisson au citron', budgetPerKg: '5',
+  annualVolumeKg: '100', positioning: 'mid', workedWithGivaudan: 'yes',
+  projectStage: 'testing', launchTiming: '6-12-months',
 };
 
 class MemoryStorage implements Storage {
@@ -41,7 +42,11 @@ test('envoie le formulaire et convertit la réponse déjà client en booléen', 
   assert.equal(options?.method, 'POST');
   const body = JSON.parse(String(options?.body));
   assert.equal(body.workedWithGivaudan, true);
-  assert.equal(body.description, values.description);
+  assert.equal(body.productType, values.productType);
+  assert.equal(body.budgetPerKg, 5);
+  assert.equal(body.annualVolumeKg, 100);
+  assert.equal('quantity' in body, false);
+  assert.equal('description' in body, false);
 });
 
 test('accepte les trois états et refuse les réponses malformées', async (t) => {
