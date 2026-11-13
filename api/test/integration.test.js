@@ -9,7 +9,9 @@ import { once } from 'node:events';
 import { setTimeout as delay } from 'node:timers/promises';
 import { test } from 'node:test';
 import pg from 'pg';
-import { createScorer } from '../dist/scoring.js';
+import express from 'express';
+import { projectsRouter } from '../dist/projects.js';
+import { createClaudeScorer, createScorer } from '../dist/scoring.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -17,15 +19,113 @@ test('le scoring utilise un délai de 120 secondes et signale les erreurs', asyn
   const project = {
     fullName: 'Test', company: 'Exemple', email: 'test@example.com',
     role: 'marketing', salesZone: 'europe', market: 'agro', quantity: 'small',
-    positioning: 'mid', workedWithGivaudan: false, description: 'Un projet de démonstration.',
+    positioning: 'mid', productType: 'boisson gazeuse', budgetPerKg: 5,
+    annualVolumeKg: 100, projectStage: 'testing', launchTiming: '6-12-months',
+    workedWithGivaudan: false, description: 'Un projet de démonstration.',
   };
   const timeout = t.mock.method(AbortSignal, 'timeout', () => new AbortController().signal);
   const fetchMock = t.mock.method(globalThis, 'fetch', async () => new Response('{"score":65}'));
   const score = createScorer('http://localhost:8000');
   assert.equal(await score(project), 65);
+  assert.equal(await score({ ...project, annualVolumeKg: 100, positioning: 'entry' }), 55);
+  assert.equal(await score({ ...project, annualVolumeKg: 5000, positioning: 'premium' }), 55);
+  assert.equal(await score({ ...project, annualVolumeKg: 100, positioning: 'premium' }), 65);
+  assert.equal(await score({ ...project, annualVolumeKg: 5000, positioning: 'mid' }), 65);
+  assert.equal(await score({ ...project, annualVolumeKg: null, positioning: 'entry' }), 65);
   assert.equal(timeout.mock.calls[0].arguments[0], 120_000);
   fetchMock.mock.mockImplementation(async () => { throw new Error('Délai dépassé'); });
   await assert.rejects(score(project), /Délai dépassé/);
+});
+
+test('le scoring Claude envoie les seuls critères et lit le JSON du modèle', async (t) => {
+  const project = {
+    fullName: 'Test', company: 'Exemple', email: 'test@example.com',
+    role: 'marketing', salesZone: 'europe', market: 'agro', quantity: 'small',
+    positioning: 'mid', productType: 'boisson gazeuse', budgetPerKg: 5,
+    annualVolumeKg: 100, projectStage: 'testing', launchTiming: '6-12-months',
+    workedWithGivaudan: false, description: 'Un projet de démonstration.',
+  };
+  const replies = ['{"score": 72}', '```json\n{"score": 72}\n```'];
+  const fetchMock = t.mock.method(globalThis, 'fetch', async (_url, init) => {
+    assert.equal(_url, 'https://api.anthropic.com/v1/messages');
+    assert.equal(init.headers['x-api-key'], 'claude-key');
+    assert.equal(init.headers['anthropic-version'], '2023-06-01');
+    const body = JSON.parse(init.body);
+    const criteria = JSON.parse(body.messages[0].content);
+    assert.equal('fullName' in criteria, false);
+    assert.equal('email' in criteria, false);
+    assert.equal('company' in criteria, false);
+    assert.equal(body.model, 'test-model');
+    return new Response(JSON.stringify({ content: [{ type: 'text', text: replies.shift() }] }));
+  });
+  const score = createClaudeScorer('claude-key', 'test-model');
+  assert.equal(await score(project), 72);
+  assert.equal(await score(project), 72);
+  assert.equal(fetchMock.mock.calls.length, 2);
+});
+
+test('le scoring Claude réessaie les indisponibilités temporaires et signale les autres erreurs', async (t) => {
+  const project = {
+    fullName: 'Test', company: 'Exemple', email: 'test@example.com',
+    role: 'marketing', salesZone: 'europe', market: 'agro', quantity: 'small',
+    positioning: 'mid', productType: 'boisson gazeuse', budgetPerKg: 5,
+    annualVolumeKg: 100, projectStage: 'testing', launchTiming: '6-12-months',
+    workedWithGivaudan: false, description: 'Un projet de démonstration.',
+  };
+  const statuses = [503, 529, 200, 503, 503, 503, 401];
+  const fetchMock = t.mock.method(globalThis, 'fetch', async () => {
+    const status = statuses.shift();
+    return new Response(status === 200 ? JSON.stringify({
+      content: [{ type: 'text', text: '{"score": 72}' }],
+    }) : '', { status });
+  });
+  const score = createClaudeScorer('claude-key', 'test-model');
+
+  assert.equal(await score(project), 72);
+  assert.equal(fetchMock.mock.calls.length, 3);
+  await assert.rejects(score(project), /Claude scoring : HTTP 503/);
+  assert.equal(fetchMock.mock.calls.length, 6);
+  await assert.rejects(score(project), /Claude scoring : HTTP 401/);
+  assert.equal(fetchMock.mock.calls.length, 7);
+});
+
+test('le mode démo accepte sans scoring et ne modifie pas le comportement normal', async () => {
+  const project = {
+    fullName: 'Test', company: 'Exemple', email: 'test@example.com',
+    role: 'marketing', salesZone: 'europe', market: 'agro',
+    positioning: 'mid', productType: 'boisson gazeuse', budgetPerKg: 5,
+    annualVolumeKg: 100, projectStage: 'testing', launchTiming: '6-12-months',
+    workedWithGivaudan: false,
+  };
+  for (const demoMode of [true, false]) {
+    let saved;
+    let scoringCalls = 0;
+    const db = { query: async (_sql, values) => {
+      saved = values;
+      return { rows: [{ id: 'test', status: values[16] }] };
+    } };
+    const app = express();
+    app.use(express.json());
+    app.use('/api', projectsRouter(db, async () => { scoringCalls++; return 40; }, demoMode));
+    const server = http.createServer(app);
+    const port = await listen(server);
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/api/projects`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(project),
+      });
+      assert.equal(response.status, 201);
+      const body = await response.json();
+      assert.equal(body.status, demoMode ? 'accepted' : 'rejected');
+      assert.equal(body.demoMode, demoMode ? true : undefined);
+      assert.equal(scoringCalls, demoMode ? 0 : 1);
+      assert.equal(saved[17], demoMode ? null : 40);
+      assert.equal(saved[18], demoMode ? null : 'score');
+    } finally {
+      await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    }
+  }
 });
 
 async function listen(server) {
@@ -113,10 +213,32 @@ test('API : base PostgreSQL et service IA simulé', { timeout: 60000 }, async (t
     });
     const mockPort = await listen(mock);
     const scoringRequests = [];
+    const chatRequests = [];
+    let chatFailure = false;
+    let malformedChat = false;
     let scoringResponse = { status: 200, body: { score: 80 } };
     scoring = http.createServer(async (req, res) => {
       const chunks = [];
       for await (const chunk of req) chunks.push(chunk);
+      if (req.url === '/ask') {
+        chatRequests.push({
+          authorization: req.headers.authorization,
+          body: JSON.parse(Buffer.concat(chunks).toString()),
+        });
+        res.setHeader('content-type', 'application/json');
+        if (chatFailure) {
+          res.writeHead(503);
+          res.end(JSON.stringify({ error: 'indisponible' }));
+        } else if (malformedChat) {
+          res.end(JSON.stringify({ conversation_id: 123, answer: '' }));
+        } else {
+          res.end(JSON.stringify({
+            conversation_id: chatRequests.at(-1).body.conversation_id ?? 123,
+            answer: 'Quel parfum souhaitez-vous ?',
+          }));
+        }
+        return;
+      }
       scoringRequests.push({
         method: req.method,
         url: req.url,
@@ -391,10 +513,13 @@ test('API : base PostgreSQL et service IA simulé', { timeout: 60000 }, async (t
       email: 'Camille@Exemple.fr',
       salesZone: 'europe',
       market: 'perfume',
-      quantity: 'small',
+      productType: "parfum d'intérieur",
+      budgetPerKg: 5,
+      annualVolumeKg: 75,
       positioning: 'premium',
+      projectStage: 'testing',
+      launchTiming: '6-12-months',
       workedWithGivaudan: false,
-      description: 'Un parfum d’intérieur inspiré des jardins méditerranéens.',
     };
     const createProject = (body) => fetch(`${apiUrl}/api/projects`, {
       method: 'POST',
@@ -427,6 +552,13 @@ test('API : base PostgreSQL et service IA simulé', { timeout: 60000 }, async (t
       assert.equal(call.url, '/score');
       assert.equal(call.authorization, 'Bearer scoring-key');
       assert.equal(call.body.market, 'perfume');
+      assert.equal(call.body.productType, "parfum d'intérieur");
+      assert.equal(call.body.budgetPerKg, 5);
+      assert.equal(call.body.annualVolumeKg, 75);
+      assert.equal(call.body.quantity, 'small');
+      assert.equal(call.body.projectStage, 'testing');
+      assert.equal(call.body.launchTiming, '6-12-months');
+      assert.match(call.body.description, /Volume annuel d'arôme acheté : 75 kg\/an/);
       assert.equal(call.body.workedWithGivaudan, false);
       assert.equal('email' in call.body, false);
       assert.equal('fullName' in call.body, false);
@@ -436,6 +568,9 @@ test('API : base PostgreSQL et service IA simulé', { timeout: 60000 }, async (t
       assert.equal(row.score, 65);
       assert.equal(row.decision_reason, 'score');
       assert.equal(row.email, 'camille@exemple.fr');
+      assert.equal(row.product_type, "parfum d'intérieur");
+      assert.equal(Number(row.budget_per_kg), 5);
+      assert.equal(Number(row.annual_volume_kg), 75);
       assert.notEqual(row.access_token_hash, created.accessToken);
       assert.ok(row.decided_at);
     });
@@ -447,14 +582,28 @@ test('API : base PostgreSQL et service IA simulé', { timeout: 60000 }, async (t
       assert.equal((await projectRow(created.id)).score, 64);
     });
 
+    await t.test('applique la pénalité provisoire faible volume et entrée de gamme', async () => {
+      scoringResponse = { status: 200, body: { score: 70 } };
+      const created = await (await createProject({
+        ...project, annualVolumeKg: 100, positioning: 'entry',
+      })).json();
+      assert.equal(created.status, 'rejected');
+      assert.equal((await projectRow(created.id)).score, 60);
+    });
+
     await t.test('valide directement un client existant sans appeler le scoring', async () => {
       const before = scoringRequests.length;
-      const created = await (await createProject({ ...project, workedWithGivaudan: true })).json();
+      const created = await (await createProject({
+        ...project, workedWithGivaudan: true, annualVolumeKg: null, budgetPerKg: null,
+      })).json();
       assert.equal(created.status, 'accepted');
       assert.equal(scoringRequests.length, before);
       const row = await projectRow(created.id);
       assert.equal(row.decision_reason, 'existing-client');
       assert.equal(row.score, null);
+      assert.equal(row.quantity, 'medium');
+      assert.equal(row.annual_volume_kg, null);
+      assert.equal(row.budget_per_kg, null);
     });
 
     await t.test('conserve le projet en attente si le scoring échoue', async () => {
@@ -480,13 +629,18 @@ test('API : base PostgreSQL et service IA simulé', { timeout: 60000 }, async (t
         ...project,
         market: 'inconnu',
         email: 'pas-un-email',
-        description: 'court',
+        productType: '',
         workedWithGivaudan: 'oui',
       });
       assert.equal(response.status, 400);
       const body = await response.json();
-      assert.deepEqual(body.fields.sort(), ['description', 'email', 'market', 'workedWithGivaudan']);
+      assert.deepEqual(body.fields.sort(), ['email', 'market', 'productType', 'workedWithGivaudan']);
       assert.equal(scoringRequests.length, before);
+      const badNumbers = await createProject({
+        ...project, budgetPerKg: -1, annualVolumeKg: 0,
+      });
+      assert.equal(badNumbers.status, 400);
+      assert.deepEqual((await badNumbers.json()).fields.sort(), ['annualVolumeKg', 'budgetPerKg']);
     });
 
     await t.test('retrouve le statut avec le jeton secret uniquement', async () => {
@@ -505,6 +659,51 @@ test('API : base PostgreSQL et service IA simulé', { timeout: 60000 }, async (t
       assert.equal((await readProject('pas-un-uuid', created.accessToken)).status, 401);
       const other = await (await createProject(project)).json();
       assert.equal((await readProject(created.id, other.accessToken)).status, 401);
+    });
+
+    await t.test('chat réservé aux projets acceptés et protégé par leur jeton', async () => {
+      const accepted = await (await createProject({ ...project, workedWithGivaudan: true })).json();
+      const acceptedProject = await projectRow(accepted.id);
+      scoringResponse = { status: 200, body: { score: 30 } };
+      const rejected = await (await createProject(project)).json();
+      scoringResponse = { status: 503, body: { error: 'indisponible' } };
+      const pending = await (await createProject(project)).json();
+      const chat = (access, method = 'GET', message = 'Bonjour') => fetch(
+        `${apiUrl}/api/projects/${access.id}/chat`,
+        {
+          method,
+          headers: { authorization: `Bearer ${access.accessToken}`, 'content-type': 'application/json' },
+          ...(method === 'POST' ? { body: JSON.stringify({ message }) } : {}),
+        },
+      );
+      assert.equal((await chat({ ...accepted, accessToken: rejected.accessToken })).status, 401);
+      assert.equal((await fetch(`${apiUrl}/api/projects/${accepted.id}/chat`)).status, 401);
+      assert.equal((await chat(rejected)).status, 403);
+      assert.equal((await chat(rejected, 'POST')).status, 403);
+      assert.equal((await chat(pending)).status, 403);
+      assert.equal((await chat(pending, 'POST')).status, 403);
+      assert.equal((await chat(accepted, 'POST', '   ')).status, 400);
+      const first = await chat(accepted, 'POST', ' Bonjour ');
+      assert.equal(first.status, 200);
+      assert.equal((await first.json()).answer, 'Quel parfum souhaitez-vous ?');
+      assert.equal(chatRequests.at(-1).body.question, 'Bonjour');
+      assert.equal(chatRequests.at(-1).body.conversation_id, null);
+      assert.equal(chatRequests.at(-1).body.context, acceptedProject.description);
+      assert.equal(chatRequests.at(-1).authorization, 'Bearer scoring-key');
+      assert.equal('email' in chatRequests.at(-1).body, false);
+      assert.equal((await chat(accepted, 'POST', 'Une pêche.')).status, 200);
+      assert.equal(chatRequests.at(-1).body.conversation_id, 123);
+      const history = await (await chat(accepted)).json();
+      assert.deepEqual(history.messages.map(({ role }) => role), ['user', 'assistant', 'user', 'assistant']);
+      assert.equal(history.project.description, acceptedProject.description);
+      chatFailure = true;
+      assert.equal((await chat(accepted, 'POST', 'Autre question')).status, 502);
+      assert.equal((await (await chat(accepted)).json()).messages.length, 4);
+      chatFailure = false;
+      malformedChat = true;
+      assert.equal((await chat(accepted, 'POST', 'Autre question')).status, 502);
+      assert.equal((await (await chat(accepted)).json()).messages.length, 4);
+      malformedChat = false;
     });
   } finally {
     if (scoring?.listening) {

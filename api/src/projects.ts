@@ -14,7 +14,7 @@ type Status = 'pending' | 'accepted' | 'rejected';
 const hash = (token: string) =>
   createHash('sha256').update(token).digest('hex');
 
-export function projectsRouter(db: pg.Pool, score: Scorer): Router {
+export function projectsRouter(db: pg.Pool, score: Scorer, demoMode = false): Router {
   const router = Router();
   const attempts = new Map<string, { count: number; expires: number }>();
 
@@ -56,7 +56,9 @@ export function projectsRouter(db: pg.Pool, score: Scorer): Router {
     let status: Status = 'pending';
     let projectScore: number | null = null;
     let reason: 'existing-client' | 'score' | null = null;
-    if (project.workedWithGivaudan) {
+    if (demoMode) {
+      status = 'accepted';
+    } else if (project.workedWithGivaudan) {
       status = 'accepted';
       reason = 'existing-client';
     } else {
@@ -73,10 +75,12 @@ export function projectsRouter(db: pg.Pool, score: Scorer): Router {
     const token = randomBytes(32).toString('base64url');
     const { rows } = await db.query(
       `INSERT INTO projects (access_token_hash, full_name, company, role, email,
-         sales_zone, market, quantity, positioning, worked_with_givaudan,
+         sales_zone, market, product_type, quantity, positioning, budget_per_kg,
+         annual_volume_kg, project_stage, launch_timing, worked_with_givaudan,
          description, status, score, decision_reason, decided_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-         CASE WHEN $12 = 'pending' THEN NULL ELSE now() END)
+         $15, $16, $17, $18, $19,
+         CASE WHEN $17 = 'pending' THEN NULL ELSE now() END)
        RETURNING id, status`,
       [
         hash(token),
@@ -86,8 +90,13 @@ export function projectsRouter(db: pg.Pool, score: Scorer): Router {
         project.email,
         project.salesZone,
         project.market,
+        project.productType,
         project.quantity,
         project.positioning,
+        project.budgetPerKg,
+        project.annualVolumeKg,
+        project.projectStage,
+        project.launchTiming,
         project.workedWithGivaudan,
         project.description,
         status,
@@ -95,7 +104,12 @@ export function projectsRouter(db: pg.Pool, score: Scorer): Router {
         reason,
       ],
     );
-    res.status(201).json({ id: rows[0].id, status: rows[0].status, accessToken: token });
+    res.status(201).json({
+      id: rows[0].id,
+      status: rows[0].status,
+      accessToken: token,
+      ...(demoMode ? { demoMode: true } : {}),
+    });
   });
 
   router.get('/projects/:id', async (req, res) => {

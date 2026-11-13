@@ -3,7 +3,8 @@ import pg from 'pg';
 import { hashPassword, parseRegistration } from './registration.js';
 import { authRouter } from './auth.js';
 import { projectsRouter } from './projects.js';
-import { createScorer } from './scoring.js';
+import { createClaudeScorer, createScorer } from './scoring.js';
+import { chatRouter, createChatService } from './chat.js';
 
 // En dev, la configuration vient de api/.env ; en production, de l'hébergeur
 try {
@@ -19,6 +20,10 @@ const {
   AI_API_KEY = '',
   SCORING_BASE_URL,
   SCORING_API_KEY = '',
+  SCORING_PROVIDER,
+  ANTHROPIC_API_KEY,
+  ANTHROPIC_MODEL,
+  DEMO_ACCEPT_PROJECTS,
 } = process.env;
 const PORT = Number(process.env.PORT ?? 3000);
 
@@ -79,7 +84,13 @@ app.post('/api/users', async (req, res) => {
 app.use(express.json());
 
 app.use('/api', authRouter(db));
-app.use('/api', projectsRouter(db, createScorer(SCORING_BASE_URL, SCORING_API_KEY)));
+const scorer = SCORING_PROVIDER === 'claude'
+  ? createClaudeScorer(ANTHROPIC_API_KEY, ANTHROPIC_MODEL)
+  : createScorer(SCORING_BASE_URL, SCORING_API_KEY);
+const demoMode = DEMO_ACCEPT_PROJECTS === 'true';
+if (demoMode) console.warn('MODE DÉMO : projets acceptés sans évaluation. Ne pas utiliser en production.');
+app.use('/api', projectsRouter(db, scorer, demoMode));
+app.use('/api', chatRouter(db, createChatService(SCORING_BASE_URL, SCORING_API_KEY)));
 
 app.get('/api/health', async (_req, res) => {
   const { rows } = await db.query('SELECT version()');

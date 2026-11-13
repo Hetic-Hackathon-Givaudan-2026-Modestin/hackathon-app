@@ -53,11 +53,11 @@ export function getBotSpeech(
         'Pardonnez-moi, il manque quelques informations. Je vous les ai signalées, rien de grave.',
     };
 
-  if (step === 'description')
+  if (step !== 'general')
     return {
       mood: 'listening',
       message:
-        'Dernière étape : racontez-moi votre projet avec vos mots, l’idée, le public visé, l’univers recherché.',
+        'Je vais vous poser quelques questions, une par une, pour mieux comprendre votre projet.',
     };
 
   if (values.workedWithGivaudan === 'yes')

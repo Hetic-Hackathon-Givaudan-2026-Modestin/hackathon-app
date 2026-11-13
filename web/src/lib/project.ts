@@ -7,15 +7,25 @@ export type ProjectValues = {
   email: string;
   salesZone: string;
   market: string;
-  quantity: string;
+  productType: string;
+  budgetPerKg: string;
+  annualVolumeKg: string;
   positioning: string;
   workedWithGivaudan: string;
-  description: string;
+  projectStage: string;
+  launchTiming: string;
 };
 
 export type ProjectErrors = Partial<Record<keyof ProjectValues, string>>;
-
-export type ProjectStep = 'general' | 'description';
+export type ProjectStep =
+  | 'general'
+  | 'product'
+  | 'budget'
+  | 'volume'
+  | 'salesZone'
+  | 'stage'
+  | 'launch'
+  | 'positioning';
 
 export const initialProject: ProjectValues = {
   fullName: '',
@@ -24,11 +34,36 @@ export const initialProject: ProjectValues = {
   email: '',
   salesZone: '',
   market: '',
-  quantity: '',
+  productType: '',
+  budgetPerKg: '',
+  annualVolumeKg: '',
   positioning: '',
   workedWithGivaudan: '',
-  description: '',
+  projectStage: '',
+  launchTiming: '',
 };
+
+export const projectSteps: ProjectStep[] = [
+  'general',
+  'product',
+  'budget',
+  'volume',
+  'salesZone',
+  'stage',
+  'launch',
+  'positioning',
+];
+
+export const projectStepLabels = [
+  'Votre projet',
+  'Produit',
+  'Budget',
+  'Volume annuel',
+  'Zone de vente',
+  'Avancement',
+  'Lancement',
+  'Positionnement',
+];
 
 // Les listes d'options sont provisoires, à confirmer avec le produit.
 export const roleOptions: Option[] = [
@@ -55,17 +90,27 @@ export const salesZoneOptions: Option[] = [
   { value: 'other', label: 'Autre zone' },
 ];
 
-export const quantityOptions: Option[] = [
-  { value: 'sample', label: 'Échantillon ou test' },
-  { value: 'small', label: 'Petite série' },
-  { value: 'medium', label: 'Série moyenne' },
-  { value: 'large', label: 'Grande série' },
-];
-
 export const positioningOptions: Option[] = [
   { value: 'entry', label: 'Entrée de gamme' },
   { value: 'mid', label: 'Milieu de gamme' },
   { value: 'premium', label: 'Premium' },
+];
+
+export const projectStageOptions: Option[] = [
+  { value: 'idea', label: 'Idée en cours de définition' },
+  { value: 'development', label: 'Développement du produit' },
+  { value: 'testing', label: 'Prototype ou tests' },
+  { value: 'ready', label: 'Prêt à être lancé' },
+  { value: 'launched', label: 'Produit déjà lancé' },
+  { value: 'unknown', label: 'Pas encore défini' },
+];
+
+export const launchTimingOptions: Option[] = [
+  { value: 'under-6-months', label: 'Dans moins de 6 mois' },
+  { value: '6-12-months', label: 'Dans 6 à 12 mois' },
+  { value: '1-2-years', label: 'Dans 1 à 2 ans' },
+  { value: 'over-2-years', label: 'Dans plus de 2 ans' },
+  { value: 'unknown', label: 'Date pas encore définie' },
 ];
 
 export const workedWithOptions: Option[] = [
@@ -73,11 +118,18 @@ export const workedWithOptions: Option[] = [
   { value: 'no', label: 'Non' },
 ];
 
-export const MAX_DESCRIPTION_LENGTH = 4000;
-export const MIN_DESCRIPTION_LENGTH = 20;
+const MAX_PRODUCT_TYPE_LENGTH = 200;
+const MAX_BUDGET_PER_KG = 1_000_000;
+const MAX_ANNUAL_VOLUME_KG = 1_000_000_000;
 
 function isOneOf(options: Option[], value: string) {
   return options.some((option) => option.value === value);
+}
+
+function numericValue(value: string) {
+  if (!value.trim()) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
 export function validateGeneral(values: ProjectValues): ProjectErrors {
@@ -93,37 +145,58 @@ export function validateGeneral(values: ProjectValues): ProjectErrors {
     errors.role = 'Choisissez votre rôle.';
   if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
     errors.email = 'Indiquez un email professionnel valide.';
-  if (!isOneOf(salesZoneOptions, values.salesZone))
-    errors.salesZone = 'Choisissez où vous souhaitez vendre.';
-  if (!isOneOf(marketOptions, values.market))
-    errors.market = 'Choisissez le marché visé.';
-  if (!isOneOf(quantityOptions, values.quantity))
-    errors.quantity = 'Choisissez une quantité envisagée.';
-  if (!isOneOf(positioningOptions, values.positioning))
-    errors.positioning = 'Choisissez un positionnement.';
   if (!isOneOf(workedWithOptions, values.workedWithGivaudan))
     errors.workedWithGivaudan = 'Répondez à cette question.';
   return errors;
 }
 
-export function validateDescription(values: ProjectValues): ProjectErrors {
-  const length = values.description.trim().length;
-  if (length < MIN_DESCRIPTION_LENGTH)
-    return {
-      description: `Décrivez votre projet en au moins ${MIN_DESCRIPTION_LENGTH} caractères.`,
-    };
-  if (length > MAX_DESCRIPTION_LENGTH)
-    return {
-      description: `La description ne peut pas dépasser ${MAX_DESCRIPTION_LENGTH} caractères.`,
-    };
-  return {};
-}
-
-export function validateStep(
-  step: ProjectStep,
+export function validateProjectStep(
+  step: Exclude<ProjectStep, 'general'>,
   values: ProjectValues,
 ): ProjectErrors {
-  return step === 'general'
-    ? validateGeneral(values)
-    : validateDescription(values);
+  switch (step) {
+    case 'product':
+      return {
+        ...(!isOneOf(marketOptions, values.market)
+          ? { market: 'Choisissez le secteur du produit.' }
+          : {}),
+        ...(!values.productType.trim() || values.productType.trim().length > MAX_PRODUCT_TYPE_LENGTH
+          ? { productType: 'Précisez le type de produit (200 caractères maximum).' }
+          : {}),
+      };
+    case 'budget': {
+      if (!values.budgetPerKg.trim()) return {};
+      const budget = numericValue(values.budgetPerKg);
+      return budget === null || budget > MAX_BUDGET_PER_KG
+        ? { budgetPerKg: 'Indiquez un budget supérieur à 0 €/kg, ou laissez vide s’il n’est pas encore défini.' }
+        : {};
+    }
+    case 'volume': {
+      if (!values.annualVolumeKg.trim()) return {};
+      const volume = numericValue(values.annualVolumeKg);
+      return volume === null || volume > MAX_ANNUAL_VOLUME_KG
+        ? { annualVolumeKg: 'Indiquez un volume supérieur à 0 kg/an, ou laissez vide s’il n’est pas encore défini.' }
+        : {};
+    }
+    case 'salesZone':
+      return isOneOf(salesZoneOptions, values.salesZone)
+        ? {}
+        : { salesZone: 'Choisissez où le produit sera vendu.' };
+    case 'stage':
+      return isOneOf(projectStageOptions, values.projectStage)
+        ? {}
+        : { projectStage: 'Indiquez l’avancement du projet.' };
+    case 'launch':
+      return isOneOf(launchTimingOptions, values.launchTiming)
+        ? {}
+        : { launchTiming: 'Indiquez quand vous souhaitez lancer le produit.' };
+    case 'positioning':
+      return isOneOf(positioningOptions, values.positioning)
+        ? {}
+        : { positioning: 'Choisissez le positionnement du produit.' };
+  }
+}
+
+export function validateStep(step: ProjectStep, values: ProjectValues): ProjectErrors {
+  return step === 'general' ? validateGeneral(values) : validateProjectStep(step, values);
 }
